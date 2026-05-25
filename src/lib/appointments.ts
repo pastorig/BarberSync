@@ -6,6 +6,7 @@ import {
 type AppointmentDraft = Omit<AppointmentInsert, "status">;
 type AppointmentAvailabilityInput = {
   barbershopSlug: string;
+  barberId: string;
   appointmentDate: string;
 };
 
@@ -39,7 +40,7 @@ export async function listAppointmentsByBarbershop(barbershopSlug: string) {
   const { data, error } = await getSupabaseClient()
     .from("appointments")
     .select(
-      "id, barbershop_slug, customer_name, customer_phone, service_name, service_price, service_duration_minutes, appointment_date, appointment_time, comment, status, created_at",
+      "id, barbershop_slug, barber_id, barber_name, customer_name, customer_phone, service_name, service_price, service_duration_minutes, appointment_date, appointment_time, comment, status, created_at",
     )
     .eq("barbershop_slug", barbershopSlug)
     .order("appointment_date", { ascending: true })
@@ -50,12 +51,14 @@ export async function listAppointmentsByBarbershop(barbershopSlug: string) {
 
 export async function listOccupiedAppointmentTimes({
   barbershopSlug,
+  barberId,
   appointmentDate,
 }: AppointmentAvailabilityInput) {
   const { data, error } = await getSupabaseClient()
     .from("appointments")
     .select("appointment_time")
     .eq("barbershop_slug", barbershopSlug)
+    .eq("barber_id", barberId)
     .eq("appointment_date", appointmentDate)
     .in("status", activeAppointmentStatuses);
 
@@ -67,11 +70,13 @@ export async function listOccupiedAppointmentTimes({
 
 export async function validateAppointmentTimeIsAvailable({
   barbershopSlug,
+  barberId,
   appointmentDate,
   appointmentTime,
 }: AppointmentTimeInput) {
   const { data, error } = await listOccupiedAppointmentTimes({
     barbershopSlug,
+    barberId,
     appointmentDate,
   });
 

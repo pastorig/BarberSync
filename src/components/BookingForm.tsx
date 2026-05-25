@@ -2,13 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import type { DemoBarbershop } from "@/data/demo-barbershops";
+import {
+  getActiveBarbers,
+  getBarberDisplayName,
+  type DemoBarbershop,
+} from "@/data/demo-barbershops";
 import {
   createPendingAppointment,
   listOccupiedAppointmentTimes,
   validateAppointmentTimeIsAvailable,
 } from "@/lib/appointments";
-import { formatDateForDisplay, formatPrice } from "@/lib/format";
+import {
+  formatDateForDisplay,
+  formatPrice,
+  getLocalDateInputValue,
+} from "@/lib/format";
 import { createWhatsAppBookingLink } from "@/lib/whatsapp";
 
 type BookingFormProps = {
@@ -16,7 +24,7 @@ type BookingFormProps = {
 };
 
 function getTodayInputValue() {
-  return new Date().toISOString().split("T")[0];
+  return getLocalDateInputValue();
 }
 
 function buildTimeSlots(start: string, end: string, intervalMinutes: number) {
@@ -41,8 +49,16 @@ function buildTimeSlots(start: string, end: string, intervalMinutes: number) {
 }
 
 export function BookingForm({ barbershop }: BookingFormProps) {
+  const activeBarbers = useMemo(
+    () => getActiveBarbers(barbershop),
+    [barbershop],
+  );
+  const initialBarber = activeBarbers[0];
+  const [selectedBarberId, setSelectedBarberId] = useState(
+    initialBarber?.id ?? "",
+  );
   const [selectedServiceId, setSelectedServiceId] = useState(
-    barbershop.services[0]?.id ?? "",
+    initialBarber?.services[0]?.id ?? "",
   );
   const [selectedDate, setSelectedDate] = useState(getTodayInputValue());
   const [selectedTime, setSelectedTime] = useState("");
@@ -64,19 +80,49 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     [barbershop.workingHours],
   );
 
-  const selectedService = barbershop.services.find(
-    (service) => service.id === selectedServiceId,
+  const selectedBarber = activeBarbers.find(
+    (barber) => barber.id === selectedBarberId,
   );
+  const selectedBarberName = selectedBarber
+    ? getBarberDisplayName(selectedBarber)
+    : "";
+  const availableServices = selectedBarber?.services ?? [];
+  const selectedService =
+    availableServices.find((service) => service.id === selectedServiceId) ??
+    availableServices[0];
+  const compactSummary = [
+    selectedService?.name,
+    selectedBarberName,
+    selectedTime,
+    clientName.trim(),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const occupiedTimeSet = useMemo(
     () => new Set(occupiedTimes),
     [occupiedTimes],
   );
 
+  function handleBarberChange(barberId: string) {
+    const barber = activeBarbers.find(
+      (currentBarber) => currentBarber.id === barberId,
+    );
+
+    setSelectedBarberId(barberId);
+    setSelectedServiceId(barber?.services[0]?.id ?? "");
+    setFormError("");
+  }
+
+  function handleServiceChange(serviceId: string) {
+    setSelectedServiceId(serviceId);
+    setFormError("");
+  }
+
   useEffect(() => {
     let isMounted = true;
 
     async function loadOccupiedTimes() {
-      if (!selectedDate) {
+      if (!selectedDate || !selectedBarberId) {
         if (isMounted) {
           setOccupiedTimes([]);
           setIsLoadingTimes(false);
@@ -89,6 +135,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
       try {
         const { data, error } = await listOccupiedAppointmentTimes({
           barbershopSlug: barbershop.slug,
+          barberId: selectedBarberId,
           appointmentDate: selectedDate,
         });
 
@@ -125,19 +172,22 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     return () => {
       isMounted = false;
     };
-  }, [barbershop.slug, selectedDate, selectedTime]);
+  }, [barbershop.slug, selectedBarberId, selectedDate, selectedTime]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (
+      !selectedBarber ||
       !selectedService ||
       !selectedDate ||
       !selectedTime ||
       !clientName.trim() ||
       !clientPhone.trim()
     ) {
-      setFormError("Completá servicio, fecha, horario, nombre y teléfono.");
+      setFormError(
+        "Completa barbero, servicio, fecha, horario, nombre y telefono.",
+      );
       return;
     }
 
@@ -147,6 +197,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     try {
       const { isAvailable, error } = await validateAppointmentTimeIsAvailable({
         barbershopSlug: barbershop.slug,
+        barberId: selectedBarber.id,
         appointmentDate: selectedDate,
         appointmentTime: selectedTime,
       });
@@ -179,6 +230,8 @@ export function BookingForm({ barbershop }: BookingFormProps) {
 
     const appointment = {
       barbershop_slug: barbershop.slug,
+      barber_id: selectedBarber.id,
+      barber_name: selectedBarberName,
       customer_name: clientName.trim(),
       customer_phone: clientPhone.trim(),
       service_name: selectedService.name,
@@ -213,6 +266,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
       clientName: appointment.customer_name,
       clientPhone: appointment.customer_phone,
       serviceName: selectedService.name,
+      barberName: selectedBarberName,
       date: formatDateForDisplay(selectedDate),
       time: selectedTime,
       comment,
@@ -224,23 +278,57 @@ export function BookingForm({ barbershop }: BookingFormProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-start"
+      className="grid gap-5 pb-24 lg:grid-cols-[1.05fr_0.95fr] lg:items-start lg:gap-8 lg:pb-0"
     >
-      <section className="space-y-6">
+      <section className="space-y-4 sm:space-y-6">
         <div>
           <p className="text-sm font-semibold uppercase text-amber-300">
             Reserva online
           </p>
-          <h1 className="mt-3 text-4xl font-black text-balance text-stone-50 sm:text-6xl">
+          <h1 className="mt-2 text-3xl font-black text-balance text-stone-50 sm:mt-3 sm:text-6xl">
             {barbershop.name}
           </h1>
-          <p className="mt-4 max-w-2xl text-lg leading-8 text-stone-300">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-300 sm:mt-4 sm:text-lg sm:leading-8">
             Elegi el servicio, la fecha y el horario. Guardamos tu reserva y
             despues abrimos WhatsApp con el mensaje listo.
           </p>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
+          {activeBarbers.length > 1 ? (
+            <div>
+              <label
+                htmlFor="barber"
+                className="text-sm font-bold uppercase text-stone-300"
+              >
+                Barbero
+              </label>
+              <select
+                id="barber"
+                value={selectedBarberId}
+                disabled={isSaving}
+                onChange={(event) => handleBarberChange(event.target.value)}
+                className="mt-1.5 min-h-10 w-full rounded-md border border-stone-700 bg-stone-900 px-3 text-base text-stone-50 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20 sm:mt-2 sm:min-h-12 sm:px-4"
+                required
+              >
+                {activeBarbers.map((barber) => (
+                  <option key={barber.id} value={barber.id}>
+                    {getBarberDisplayName(barber)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : selectedBarber ? (
+            <div className="rounded-md border border-stone-800 bg-stone-900/60 px-3 py-2">
+              <p className="text-[11px] font-bold uppercase text-stone-500">
+                Barbero
+              </p>
+              <p className="text-sm font-semibold text-stone-100">
+                {selectedBarberName}
+              </p>
+            </div>
+          ) : null}
+
           <div>
             <label
               htmlFor="service"
@@ -250,16 +338,13 @@ export function BookingForm({ barbershop }: BookingFormProps) {
             </label>
             <select
               id="service"
-              value={selectedServiceId}
-              disabled={isSaving}
-              onChange={(event) => {
-                setSelectedServiceId(event.target.value);
-                setFormError("");
-              }}
-              className="mt-2 min-h-12 w-full rounded-md border border-stone-700 bg-stone-900 px-4 text-base text-stone-50 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
+              value={selectedService?.id ?? ""}
+              disabled={isSaving || !selectedBarber}
+              onChange={(event) => handleServiceChange(event.target.value)}
+              className="mt-1.5 min-h-10 w-full rounded-md border border-stone-700 bg-stone-900 px-3 text-base text-stone-50 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20 sm:mt-2 sm:min-h-12 sm:px-4"
               required
             >
-              {barbershop.services.map((service) => (
+              {availableServices.map((service) => (
                 <option key={service.id} value={service.id}>
                   {service.name} - {formatPrice(service.price)}
                 </option>
@@ -267,7 +352,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
             </select>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             <div>
               <label
                 htmlFor="date"
@@ -284,7 +369,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                   setSelectedDate(event.target.value);
                   setFormError("");
                 }}
-                className="mt-2 min-h-12 w-full rounded-md border border-stone-700 bg-stone-900 px-4 text-base text-stone-50 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
+                className="mt-1.5 min-h-10 w-full rounded-md border border-stone-700 bg-stone-900 px-3 text-base text-stone-50 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20 sm:mt-2 sm:min-h-12 sm:px-4"
                 required
               />
             </div>
@@ -297,7 +382,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                 Horario
               </label>
               {isLoadingTimes ? (
-                <p className="mt-2 text-sm text-stone-400">
+                <p className="mt-1.5 text-xs text-stone-400 sm:mt-2 sm:text-sm">
                   Actualizando horarios disponibles...
                 </p>
               ) : null}
@@ -309,7 +394,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                   setSelectedTime(event.target.value);
                   setFormError("");
                 }}
-                className="mt-2 min-h-12 w-full rounded-md border border-stone-700 bg-stone-900 px-4 text-base text-stone-50 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
+                className="mt-1.5 min-h-10 w-full rounded-md border border-stone-700 bg-stone-900 px-3 text-base text-stone-50 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20 sm:mt-2 sm:min-h-12 sm:px-4"
                 required
               >
                 <option value="">Seleccioná un horario</option>
@@ -326,11 +411,11 @@ export function BookingForm({ barbershop }: BookingFormProps) {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4">
             <div>
               <label
                 htmlFor="clientName"
-                className="text-sm font-bold uppercase text-stone-300"
+                className="text-[11px] font-bold uppercase text-stone-400 sm:text-sm sm:text-stone-300"
               >
                 Nombre
               </label>
@@ -343,8 +428,8 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                   setClientName(event.target.value);
                   setFormError("");
                 }}
-                placeholder="Tu nombre"
-                className="mt-2 min-h-12 w-full rounded-md border border-stone-700 bg-stone-900 px-4 text-base text-stone-50 outline-none transition placeholder:text-stone-500 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
+                placeholder="Nombre"
+                className="mt-1 min-h-9 w-full rounded-md border border-stone-700 bg-stone-900 px-2.5 text-sm text-stone-50 outline-none transition placeholder:text-stone-500 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20 sm:mt-2 sm:min-h-12 sm:px-4 sm:text-base"
                 required
               />
             </div>
@@ -352,9 +437,9 @@ export function BookingForm({ barbershop }: BookingFormProps) {
             <div>
               <label
                 htmlFor="clientPhone"
-                className="text-sm font-bold uppercase text-stone-300"
+                className="text-[11px] font-bold uppercase text-stone-400 sm:text-sm sm:text-stone-300"
               >
-                Teléfono
+                Tel
               </label>
               <input
                 id="clientPhone"
@@ -365,8 +450,8 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                   setClientPhone(event.target.value);
                   setFormError("");
                 }}
-                placeholder="Tu teléfono"
-                className="mt-2 min-h-12 w-full rounded-md border border-stone-700 bg-stone-900 px-4 text-base text-stone-50 outline-none transition placeholder:text-stone-500 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
+                placeholder="Teléfono"
+                className="mt-1 min-h-9 w-full rounded-md border border-stone-700 bg-stone-900 px-2.5 text-sm text-stone-50 outline-none transition placeholder:text-stone-500 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20 sm:mt-2 sm:min-h-12 sm:px-4 sm:text-base"
                 required
               />
             </div>
@@ -375,7 +460,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
           <div>
             <label
               htmlFor="comment"
-              className="text-sm font-bold uppercase text-stone-300"
+              className="text-[11px] font-bold uppercase text-stone-400 sm:text-sm sm:text-stone-300"
             >
               Comentario opcional
             </label>
@@ -387,34 +472,40 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                 setFormError("");
               }}
               disabled={isSaving}
-              placeholder="Detalle o preferencia para el turno"
-              rows={4}
-              className="mt-2 w-full rounded-md border border-stone-700 bg-stone-900 px-4 py-3 text-base text-stone-50 outline-none transition placeholder:text-stone-500 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
+              placeholder="Preferencia o detalle"
+              rows={2}
+              className="mt-1 w-full rounded-md border border-stone-700 bg-stone-900 px-2.5 py-2 text-sm text-stone-50 outline-none transition placeholder:text-stone-500 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20 sm:mt-2 sm:px-4 sm:py-3 sm:text-base"
             />
           </div>
         </div>
       </section>
 
-      <aside className="border border-stone-800 bg-stone-900/70 p-6 shadow-2xl shadow-black/30">
+      <aside className="border border-stone-800 bg-stone-900/70 p-4 shadow-2xl shadow-black/30 sm:p-6">
         <p className="text-xs font-bold uppercase text-amber-300">Resumen</p>
-        <h2 className="mt-2 text-2xl font-black text-stone-100">
+        <h2 className="mt-1 text-xl font-black text-stone-100 sm:mt-2 sm:text-2xl">
           Tu turno seleccionado
         </h2>
 
-        <dl className="mt-6 space-y-4 text-sm">
-          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-4">
+        <dl className="mt-4 space-y-2 text-sm sm:mt-6 sm:space-y-4">
+          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-2 sm:pb-4">
+            <dt className="text-stone-400">Barbero</dt>
+            <dd className="text-right font-semibold text-stone-100">
+              {selectedBarberName || "Sin seleccionar"}
+            </dd>
+          </div>
+          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-2 sm:pb-4">
             <dt className="text-stone-400">Servicio</dt>
             <dd className="text-right font-semibold text-stone-100">
               {selectedService?.name ?? "Sin seleccionar"}
             </dd>
           </div>
-          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-4">
+          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-2 sm:pb-4">
             <dt className="text-stone-400">Precio</dt>
             <dd className="font-mono font-bold text-amber-300">
               {selectedService ? formatPrice(selectedService.price) : "-"}
             </dd>
           </div>
-          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-4">
+          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-2 sm:pb-4">
             <dt className="text-stone-400">Duración</dt>
             <dd className="font-semibold text-stone-100">
               {selectedService
@@ -422,25 +513,25 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                 : "-"}
             </dd>
           </div>
-          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-4">
+          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-2 sm:pb-4">
             <dt className="text-stone-400">Fecha</dt>
             <dd className="font-semibold text-stone-100">
               {selectedDate || "Sin seleccionar"}
             </dd>
           </div>
-          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-4">
+          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-2 sm:pb-4">
             <dt className="text-stone-400">Horario</dt>
             <dd className="font-semibold text-stone-100">
               {selectedTime || "Sin seleccionar"}
             </dd>
           </div>
-          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-4">
+          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-2 sm:pb-4">
             <dt className="text-stone-400">Cliente</dt>
             <dd className="text-right font-semibold text-stone-100">
               {clientName || "Sin completar"}
             </dd>
           </div>
-          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-4">
+          <div className="flex items-start justify-between gap-4 border-b border-stone-800 pb-2 sm:pb-4">
             <dt className="text-stone-400">Teléfono</dt>
             <dd className="text-right font-semibold text-stone-100">
               {clientPhone || "Sin completar"}
@@ -457,13 +548,13 @@ export function BookingForm({ barbershop }: BookingFormProps) {
         {formError ? (
           <p
             role="alert"
-            className="mt-6 rounded-md border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200"
+            className="mt-4 rounded-md border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-200 sm:mt-6 sm:px-4 sm:py-3"
           >
             {formError}
           </p>
         ) : null}
 
-        <p className="mt-6 text-sm leading-6 text-stone-400">
+        <p className="mt-4 text-xs leading-5 text-stone-400 sm:mt-6 sm:text-sm sm:leading-6">
           Al reservar, se guarda el turno y se abre WhatsApp para confirmar el
           mensaje.
         </p>
@@ -471,11 +562,31 @@ export function BookingForm({ barbershop }: BookingFormProps) {
         <button
           type="submit"
           disabled={isSaving}
-          className="mt-8 inline-flex min-h-12 w-full items-center justify-center rounded-md bg-amber-300 px-6 py-3 text-sm font-bold uppercase text-stone-950 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-stone-950 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-amber-300"
+          className="mt-5 hidden min-h-11 w-full items-center justify-center rounded-md bg-amber-300 px-5 py-2.5 text-sm font-bold uppercase text-stone-950 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-stone-950 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-amber-300 lg:inline-flex lg:min-h-12 lg:px-6 lg:py-3"
         >
           {isSaving ? "Guardando..." : "Reservar turno"}
         </button>
       </aside>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-800 bg-stone-950/95 px-3 py-3 shadow-2xl shadow-black/40 backdrop-blur lg:hidden">
+        <div className="mx-auto grid max-w-6xl grid-cols-[1fr_auto] items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase text-stone-500">
+              Tu turno
+            </p>
+            <p className="truncate text-sm font-semibold text-stone-100">
+              {compactSummary || "Completá los datos para reservar"}
+            </p>
+          </div>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-amber-300 px-4 py-2 text-xs font-bold uppercase text-stone-950 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-stone-950 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-amber-300"
+          >
+            {isSaving ? "Guardando..." : "Reservar turno"}
+          </button>
+        </div>
+      </div>
     </form>
   );
 }

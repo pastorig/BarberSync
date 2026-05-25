@@ -1,8 +1,20 @@
-export type BarbershopService = {
+export type BarberService = {
   id: string;
   name: string;
   price: number;
   durationMinutes: number;
+};
+
+export type BarbershopService = BarberService;
+
+export type Barber = {
+  id: string;
+  name: string;
+  role?: string;
+  displayName?: string;
+  whatsapp?: string;
+  isActive: boolean;
+  services: BarberService[];
 };
 
 export type WorkingHours = {
@@ -18,7 +30,7 @@ export type DemoBarbershop = {
   description: string;
   instagram: string;
   whatsapp: string;
-  services: BarbershopService[];
+  barbers: Barber[];
   workingHours: WorkingHours;
 };
 
@@ -27,21 +39,30 @@ export const demoBarbershops: DemoBarbershop[] = [
     id: "barbershop_sv_barber",
     slug: "sv-barber",
     name: "SV Barber",
-    description: "Reservá tu turno online",
+    description: "Reserva tu turno online",
     instagram: "https://instagram.com/svbarber",
     whatsapp: "+54 9 11 0000-0000",
-    services: [
+    barbers: [
       {
-        id: "service_haircut",
-        name: "Corte",
-        price: 8500,
-        durationMinutes: 30,
-      },
-      {
-        id: "service_haircut_beard",
-        name: "Corte + barba",
-        price: 10000,
-        durationMinutes: 30,
+        id: "santi-vargas",
+        name: "Santi Vargas",
+        role: "Barbero",
+        displayName: "Santi Vargas",
+        isActive: true,
+        services: [
+          {
+            id: "service_haircut",
+            name: "Corte",
+            price: 8500,
+            durationMinutes: 30,
+          },
+          {
+            id: "service_haircut_beard",
+            name: "Corte + barba",
+            price: 10000,
+            durationMinutes: 30,
+          },
+        ],
       },
     ],
     workingHours: {
@@ -58,4 +79,20 @@ export function getDemoBarbershopBySlug(slug: string) {
 
 export function getFeaturedDemoBarbershop() {
   return demoBarbershops[0];
+}
+
+export function getActiveBarbers(barbershop: DemoBarbershop) {
+  return barbershop.barbers.filter((barber) => barber.isActive);
+}
+
+export function getBarberDisplayName(barber: Barber) {
+  return barber.displayName ?? barber.name;
+}
+
+export function getPrimaryActiveBarber(barbershop: DemoBarbershop) {
+  return getActiveBarbers(barbershop)[0];
+}
+
+export function getPublicServices(barbershop: DemoBarbershop) {
+  return getPrimaryActiveBarber(barbershop)?.services ?? [];
 }

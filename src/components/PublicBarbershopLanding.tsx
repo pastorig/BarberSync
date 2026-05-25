@@ -1,4 +1,7 @@
-import type { DemoBarbershop } from "@/data/demo-barbershops";
+import {
+  getPublicServices,
+  type DemoBarbershop,
+} from "@/data/demo-barbershops";
 import { HeroSection } from "./HeroSection";
 import { ServicesSection } from "./ServicesSection";
 
@@ -15,7 +18,7 @@ export function PublicBarbershopLanding({
         <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <HeroSection barbershop={barbershop} />
           <ServicesSection
-            services={barbershop.services}
+            services={getPublicServices(barbershop)}
             workingHours={barbershop.workingHours}
           />
         </div>

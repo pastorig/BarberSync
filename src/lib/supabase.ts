@@ -4,6 +4,8 @@ type AppointmentStatus = "pending" | "confirmed" | "cancelled";
 
 type AppointmentInsert = {
   barbershop_slug: string;
+  barber_id: string;
+  barber_name: string;
   customer_name: string;
   customer_phone: string;
   service_name: string;

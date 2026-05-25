@@ -4,6 +4,7 @@ type WhatsAppBookingLinkInput = {
   clientName: string;
   clientPhone: string;
   serviceName: string;
+  barberName?: string;
   date: string;
   time: string;
   comment?: string;
@@ -28,6 +29,7 @@ export function createWhatsAppBookingLink({
   clientName,
   clientPhone,
   serviceName,
+  barberName,
   date,
   time,
   comment,
@@ -39,9 +41,13 @@ export function createWhatsAppBookingLink({
     `Nombre: ${clientName}`,
     `Telefono: ${clientPhone}`,
     `Servicio: ${serviceName}`,
-    `Fecha: ${date}`,
-    `Horario: ${time}`,
   ];
+
+  if (barberName) {
+    messageLines.push(`Barbero: ${barberName}`);
+  }
+
+  messageLines.push(`Fecha: ${date}`, `Horario: ${time}`);
 
   if (comment?.trim()) {
     messageLines.push(`Comentario: ${comment.trim()}`);

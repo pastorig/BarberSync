@@ -1,12 +1,11 @@
 import { notFound } from "next/navigation";
-import { AdminAuthGuard } from "@/components/AdminAuthGuard";
-import { AdminAppointments } from "@/components/AdminAppointments";
+import { AdminLoginForm } from "@/components/AdminLoginForm";
 import {
   demoBarbershops,
   getDemoBarbershopBySlug,
 } from "@/data/demo-barbershops";
 
-type AdminPageProps = {
+type AdminLoginPageProps = {
   params: Promise<{
     barbershopSlug: string;
   }>;
@@ -18,7 +17,9 @@ export function generateStaticParams() {
   }));
 }
 
-export default async function AdminPage({ params }: AdminPageProps) {
+export default async function AdminLoginPage({
+  params,
+}: AdminLoginPageProps) {
   const { barbershopSlug } = await params;
   const barbershop = getDemoBarbershopBySlug(barbershopSlug);
 
@@ -26,9 +27,5 @@ export default async function AdminPage({ params }: AdminPageProps) {
     notFound();
   }
 
-  return (
-    <AdminAuthGuard barbershopSlug={barbershop.slug}>
-      <AdminAppointments barbershop={barbershop} />
-    </AdminAuthGuard>
-  );
+  return <AdminLoginForm barbershop={barbershop} />;
 }
