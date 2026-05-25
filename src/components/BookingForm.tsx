@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
-import { createPendingAppointment } from "@/lib/appointments";
+import {
+  createPendingAppointment,
+  listOccupiedAppointmentTimes,
+  validateAppointmentTimeIsAvailable,
+} from "@/lib/appointments";
 import { formatDateForDisplay, formatPrice } from "@/lib/format";
 import { createWhatsAppBookingLink } from "@/lib/whatsapp";
 
@@ -47,6 +51,8 @@ export function BookingForm({ barbershop }: BookingFormProps) {
   const [comment, setComment] = useState("");
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [occupiedTimes, setOccupiedTimes] = useState<string[]>([]);
+  const [isLoadingTimes, setIsLoadingTimes] = useState(false);
 
   const timeSlots = useMemo(
     () =>
@@ -61,6 +67,65 @@ export function BookingForm({ barbershop }: BookingFormProps) {
   const selectedService = barbershop.services.find(
     (service) => service.id === selectedServiceId,
   );
+  const occupiedTimeSet = useMemo(
+    () => new Set(occupiedTimes),
+    [occupiedTimes],
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadOccupiedTimes() {
+      if (!selectedDate) {
+        if (isMounted) {
+          setOccupiedTimes([]);
+          setIsLoadingTimes(false);
+        }
+        return;
+      }
+
+      setIsLoadingTimes(true);
+
+      try {
+        const { data, error } = await listOccupiedAppointmentTimes({
+          barbershopSlug: barbershop.slug,
+          appointmentDate: selectedDate,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (error) {
+          setOccupiedTimes([]);
+          setFormError("No pudimos actualizar la disponibilidad de horarios.");
+          return;
+        }
+
+        setOccupiedTimes(data);
+
+        if (selectedTime && data.includes(selectedTime)) {
+          setSelectedTime("");
+          setFormError("Ese horario acaba de ocuparse. Elegi otro.");
+        }
+      } catch {
+        if (isMounted) {
+          setOccupiedTimes([]);
+          setFormError("No pudimos actualizar la disponibilidad de horarios.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingTimes(false);
+        }
+      }
+    }
+
+    loadOccupiedTimes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [barbershop.slug, selectedDate, selectedTime]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,6 +142,39 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     }
 
     setFormError("");
+    setIsSaving(true);
+
+    try {
+      const { isAvailable, error } = await validateAppointmentTimeIsAvailable({
+        barbershopSlug: barbershop.slug,
+        appointmentDate: selectedDate,
+        appointmentTime: selectedTime,
+      });
+
+      if (error) {
+        setFormError(
+          "No pudimos validar la disponibilidad. Intentá nuevamente.",
+        );
+        return;
+      }
+
+      if (!isAvailable) {
+        setOccupiedTimes((currentTimes) =>
+          currentTimes.includes(selectedTime)
+            ? currentTimes
+            : [...currentTimes, selectedTime],
+        );
+        setSelectedTime("");
+        setFormError("Ese horario ya fue reservado. Elegi otro horario.");
+        return;
+      }
+    } catch {
+      setFormError("No pudimos validar la disponibilidad. Intentá nuevamente.");
+      return;
+    } finally {
+      setIsSaving(false);
+    }
+
     setIsSaving(true);
 
     const appointment = {
@@ -198,10 +296,15 @@ export function BookingForm({ barbershop }: BookingFormProps) {
               >
                 Horario
               </label>
+              {isLoadingTimes ? (
+                <p className="mt-2 text-sm text-stone-400">
+                  Actualizando horarios disponibles...
+                </p>
+              ) : null}
               <select
                 id="time"
                 value={selectedTime}
-                disabled={isSaving}
+                disabled={isSaving || isLoadingTimes}
                 onChange={(event) => {
                   setSelectedTime(event.target.value);
                   setFormError("");
@@ -211,8 +314,12 @@ export function BookingForm({ barbershop }: BookingFormProps) {
               >
                 <option value="">Seleccioná un horario</option>
                 {timeSlots.map((slot) => (
-                  <option key={slot} value={slot}>
-                    {slot}
+                  <option
+                    disabled={occupiedTimeSet.has(slot)}
+                    key={slot}
+                    value={slot}
+                  >
+                    {occupiedTimeSet.has(slot) ? `${slot} - Ocupado` : slot}
                   </option>
                 ))}
               </select>

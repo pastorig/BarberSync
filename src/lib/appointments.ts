@@ -4,6 +4,16 @@ import {
 } from "@/lib/supabase";
 
 type AppointmentDraft = Omit<AppointmentInsert, "status">;
+type AppointmentAvailabilityInput = {
+  barbershopSlug: string;
+  appointmentDate: string;
+};
+
+type AppointmentTimeInput = AppointmentAvailabilityInput & {
+  appointmentTime: string;
+};
+
+const activeAppointmentStatuses = ["pending", "confirmed"];
 
 export async function createPendingAppointment(appointment: AppointmentDraft) {
   return getSupabaseClient()
@@ -22,4 +32,41 @@ export async function listAppointmentsByBarbershop(barbershopSlug: string) {
     .order("appointment_time", { ascending: true });
 
   return { data, error };
+}
+
+export async function listOccupiedAppointmentTimes({
+  barbershopSlug,
+  appointmentDate,
+}: AppointmentAvailabilityInput) {
+  const { data, error } = await getSupabaseClient()
+    .from("appointments")
+    .select("appointment_time")
+    .eq("barbershop_slug", barbershopSlug)
+    .eq("appointment_date", appointmentDate)
+    .in("status", activeAppointmentStatuses);
+
+  return {
+    data: data?.map((appointment) => appointment.appointment_time) ?? [],
+    error,
+  };
+}
+
+export async function validateAppointmentTimeIsAvailable({
+  barbershopSlug,
+  appointmentDate,
+  appointmentTime,
+}: AppointmentTimeInput) {
+  const { data, error } = await listOccupiedAppointmentTimes({
+    barbershopSlug,
+    appointmentDate,
+  });
+
+  if (error) {
+    return { isAvailable: false, error };
+  }
+
+  return {
+    isAvailable: !data.includes(appointmentTime),
+    error: null,
+  };
 }
