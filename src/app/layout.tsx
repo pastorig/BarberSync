@@ -36,18 +36,18 @@ export const metadata: Metadata = {
       "Reservas, barberos, servicios y agenda en una plataforma operativa. Pensado para usar mientras se trabaja.",
     type: "website",
     siteName: "BarberSync",
-    images: [{ url: "/brand/og-image.svg", width: 1200, height: 630 }],
+    // La imagen se genera automáticamente desde src/app/opengraph-image.tsx
+    // (Next auto-detecta el archivo y lo expone como /opengraph-image en PNG).
   },
   twitter: {
     card: "summary_large_image",
     title: "BarberSync",
     description: "Sistema de turnos para barberías modernas.",
-    images: ["/brand/og-image.svg"],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a09",
+  themeColor: "#000000",
   colorScheme: "dark",
 };
 
@@ -61,7 +61,7 @@ export default function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="bg-app min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }
