@@ -59,6 +59,15 @@ type BarberServiceRow = BarberServiceInsert & {
 
 type BarberServiceUpdate = Partial<BarberServiceInsert>;
 
+type BarbershopAdminRow = {
+  user_id: string;
+  barbershop_slug: string;
+  role: string;
+};
+
+type BarbershopAdminInsert = BarbershopAdminRow;
+type BarbershopAdminUpdate = Partial<BarbershopAdminRow>;
+
 type Database = {
   public: {
     Tables: {
@@ -78,6 +87,12 @@ type Database = {
         Row: BarberServiceRow;
         Insert: BarberServiceInsert;
         Update: BarberServiceUpdate;
+        Relationships: [];
+      };
+      barbershop_admins: {
+        Row: BarbershopAdminRow;
+        Insert: BarbershopAdminInsert;
+        Update: BarbershopAdminUpdate;
         Relationships: [];
       };
     };
@@ -121,4 +136,7 @@ export type {
   BarberServiceRow,
   BarberServiceUpdate,
   BarberUpdate,
+  BarbershopAdminInsert,
+  BarbershopAdminRow,
+  BarbershopAdminUpdate,
 };
