@@ -15,16 +15,31 @@ type AdminAppointmentsProps = {
   barbershop: DemoBarbershop;
 };
 
-type AppointmentFilter = "all" | "today" | "pending" | "confirmed" | "cancelled";
+type AppointmentFilter =
+  | "all"
+  | "selectedDate"
+  | "today"
+  | "pending"
+  | "confirmed"
+  | "cancelled";
 
 function getTodayInputValue() {
   return new Date().toISOString().split("T")[0];
+}
+
+function getCurrentTimeValue() {
+  return new Date().toLocaleTimeString("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [selectedDate, setSelectedDate] = useState(getTodayInputValue());
   const [activeFilter, setActiveFilter] = useState<AppointmentFilter>("all");
   const [confirmingAppointmentId, setConfirmingAppointmentId] = useState<
     string | null
@@ -46,11 +61,58 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   }
 
   const today = getTodayInputValue();
+  const currentTime = getCurrentTimeValue();
+  const isSelectedDateToday = selectedDate === today;
+  const isSelectedDateFuture = selectedDate > today;
+  const canShowUpcomingAppointment = isSelectedDateToday || isSelectedDateFuture;
+  const todayAppointments = appointments.filter(
+    (appointment) => appointment.appointment_date === today,
+  );
+  const selectedDateAppointments = appointments.filter(
+    (appointment) => appointment.appointment_date === selectedDate,
+  );
+  const upcomingAppointment = selectedDateAppointments
+    .filter(
+      (appointment) =>
+        (appointment.status === "pending" ||
+          appointment.status === "confirmed") &&
+        canShowUpcomingAppointment &&
+        (isSelectedDateFuture ||
+          (isSelectedDateToday && appointment.appointment_time >= currentTime)),
+    )
+    .sort((firstAppointment, secondAppointment) =>
+      firstAppointment.appointment_time.localeCompare(
+        secondAppointment.appointment_time,
+      ),
+    )[0];
+  const todaySummaryCards = [
+    {
+      label: "Turnos del dia",
+      value: selectedDateAppointments.length,
+    },
+    {
+      label: "Pendientes del dia",
+      value: selectedDateAppointments.filter(
+        (appointment) => appointment.status === "pending",
+      ).length,
+    },
+    {
+      label: "Confirmados del dia",
+      value: selectedDateAppointments.filter(
+        (appointment) => appointment.status === "confirmed",
+      ).length,
+    },
+    {
+      label: "Cancelados del dia",
+      value: selectedDateAppointments.filter(
+        (appointment) => appointment.status === "cancelled",
+      ).length,
+    },
+  ];
   const filterCounts: Record<AppointmentFilter, number> = {
     all: appointments.length,
-    today: appointments.filter(
-      (appointment) => appointment.appointment_date === today,
-    ).length,
+    selectedDate: selectedDateAppointments.length,
+    today: todayAppointments.length,
     pending: appointments.filter((appointment) => appointment.status === "pending")
       .length,
     confirmed: appointments.filter(
@@ -62,6 +124,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   };
   const filterOptions: Array<{ label: string; value: AppointmentFilter }> = [
     { label: "Todos", value: "all" },
+    { label: "Fecha seleccionada", value: "selectedDate" },
     { label: "Hoy", value: "today" },
     { label: "Pendientes", value: "pending" },
     { label: "Confirmados", value: "confirmed" },
@@ -74,6 +137,10 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
 
     if (activeFilter === "today") {
       return appointment.appointment_date === today;
+    }
+
+    if (activeFilter === "selectedDate") {
+      return appointment.appointment_date === selectedDate;
     }
 
     return appointment.status === activeFilter;
@@ -165,6 +232,12 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     }
   }
 
+  function handleGoToToday() {
+    const currentDate = getTodayInputValue();
+    setSelectedDate(currentDate);
+    setActiveFilter("selectedDate");
+  }
+
   useEffect(() => {
     let isMounted = true;
 
@@ -244,6 +317,88 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
             <div className="border border-red-400/30 bg-red-500/10 p-6 text-sm font-semibold text-red-200">
               {errorMessage}
             </div>
+          ) : null}
+
+          {!isLoading && !errorMessage ? (
+            <section className="mb-8">
+              <div className="mb-5 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs font-bold uppercase text-amber-300">
+                    Resumen por fecha
+                  </p>
+                  <h2 className="text-2xl font-black text-stone-100">
+                    {formatDateForDisplay(selectedDate)}
+                  </h2>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <div>
+                    <label
+                      htmlFor="admin-date"
+                      className="text-xs font-bold uppercase text-stone-400"
+                    >
+                      Fecha
+                    </label>
+                    <input
+                      id="admin-date"
+                      type="date"
+                      value={selectedDate}
+                      onChange={(event) => {
+                        setSelectedDate(event.target.value);
+                        setActiveFilter("selectedDate");
+                      }}
+                      className="mt-2 min-h-11 w-full rounded-md border border-stone-700 bg-stone-900 px-4 text-base text-stone-50 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoToToday}
+                    className="min-h-11 self-end rounded-md border border-stone-700 px-4 py-2 text-sm font-bold text-stone-100 transition hover:border-amber-300 hover:text-amber-200"
+                  >
+                    Hoy
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {todaySummaryCards.map((card) => (
+                  <article
+                    key={card.label}
+                    className="border border-stone-800 bg-stone-900/70 p-4"
+                  >
+                    <p className="text-xs font-bold uppercase text-stone-400">
+                      {card.label}
+                    </p>
+                    <p className="mt-3 font-mono text-3xl font-black text-amber-300">
+                      {card.value}
+                    </p>
+                  </article>
+                ))}
+
+                <article className="border border-stone-800 bg-stone-900/70 p-4 sm:col-span-2 lg:col-span-1">
+                  <p className="text-xs font-bold uppercase text-stone-400">
+                    Proximo turno del dia
+                  </p>
+                  {upcomingAppointment ? (
+                    <div className="mt-3">
+                      <p className="font-mono text-3xl font-black text-amber-300">
+                        {upcomingAppointment.appointment_time}
+                      </p>
+                      <p className="mt-2 font-semibold text-stone-100">
+                        {upcomingAppointment.customer_name}
+                      </p>
+                      <p className="mt-1 text-sm text-stone-400">
+                        {upcomingAppointment.service_name}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm font-semibold text-stone-300">
+                      Sin proximos turnos
+                    </p>
+                  )}
+                </article>
+              </div>
+            </section>
           ) : null}
 
           {!isLoading && !errorMessage && appointments.length > 0 ? (
