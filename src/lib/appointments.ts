@@ -28,6 +28,13 @@ export async function confirmAppointment(appointmentId: string) {
     .eq("id", appointmentId);
 }
 
+export async function cancelAppointment(appointmentId: string) {
+  return getSupabaseClient()
+    .from("appointments")
+    .update({ status: "cancelled" })
+    .eq("id", appointmentId);
+}
+
 export async function listAppointmentsByBarbershop(barbershopSlug: string) {
   const { data, error } = await getSupabaseClient()
     .from("appointments")

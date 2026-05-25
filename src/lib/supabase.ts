@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+type AppointmentStatus = "pending" | "confirmed" | "cancelled";
+
 type AppointmentInsert = {
   barbershop_slug: string;
   customer_name: string;
@@ -10,7 +12,7 @@ type AppointmentInsert = {
   appointment_date: string;
   appointment_time: string;
   comment: string;
-  status: "pending" | "confirmed";
+  status: AppointmentStatus;
 };
 
 type AppointmentRow = Omit<AppointmentInsert, "status"> & {
@@ -59,4 +61,4 @@ export function getSupabaseClient() {
   return supabaseClient;
 }
 
-export type { AppointmentInsert, AppointmentRow };
+export type { AppointmentInsert, AppointmentRow, AppointmentStatus };

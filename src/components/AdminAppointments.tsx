@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
 import {
+  cancelAppointment,
   confirmAppointment,
   listAppointmentsByBarbershop,
 } from "@/lib/appointments";
@@ -21,6 +22,21 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   const [confirmingAppointmentId, setConfirmingAppointmentId] = useState<
     string | null
   >(null);
+  const [cancellingAppointmentId, setCancellingAppointmentId] = useState<
+    string | null
+  >(null);
+
+  function getStatusClasses(status: string) {
+    if (status === "confirmed") {
+      return "border-emerald-300/30 bg-emerald-300/10 text-emerald-200";
+    }
+
+    if (status === "cancelled") {
+      return "border-red-300/30 bg-red-400/10 text-red-200";
+    }
+
+    return "border-amber-300/30 bg-amber-300/10 text-amber-200";
+  }
 
   async function handleConfirmAppointment(appointment: AppointmentRow) {
     if (!appointment.id) {
@@ -61,6 +77,47 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       setErrorMessage("No pudimos confirmar la reserva.");
     } finally {
       setConfirmingAppointmentId(null);
+    }
+  }
+
+  async function handleCancelAppointment(appointment: AppointmentRow) {
+    if (!appointment.id) {
+      setErrorMessage("No pudimos identificar la reserva.");
+      return;
+    }
+
+    const shouldCancel = window.confirm(
+      `¿Cancelar el turno de ${appointment.customer_name} del ${formatDateForDisplay(
+        appointment.appointment_date,
+      )} a las ${appointment.appointment_time}?`,
+    );
+
+    if (!shouldCancel) {
+      return;
+    }
+
+    setErrorMessage("");
+    setCancellingAppointmentId(appointment.id);
+
+    try {
+      const { error } = await cancelAppointment(appointment.id);
+
+      if (error) {
+        setErrorMessage("No pudimos cancelar la reserva.");
+        return;
+      }
+
+      setAppointments((currentAppointments) =>
+        currentAppointments.map((currentAppointment) =>
+          currentAppointment.id === appointment.id
+            ? { ...currentAppointment, status: "cancelled" }
+            : currentAppointment,
+        ),
+      );
+    } catch {
+      setErrorMessage("No pudimos cancelar la reserva.");
+    } finally {
+      setCancellingAppointmentId(null);
     }
   }
 
@@ -153,7 +210,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
 
           {!isLoading && !errorMessage && appointments.length > 0 ? (
             <div className="overflow-hidden border border-stone-800 bg-stone-900/70">
-              <div className="hidden grid-cols-[0.8fr_0.65fr_1fr_0.95fr_0.95fr_0.65fr_1fr_0.75fr_1.1fr] gap-4 border-b border-stone-800 px-5 py-4 text-xs font-bold uppercase text-stone-400 lg:grid">
+              <div className="hidden grid-cols-[0.8fr_0.65fr_1fr_0.95fr_0.95fr_0.65fr_1fr_0.75fr_1.35fr] gap-4 border-b border-stone-800 px-5 py-4 text-xs font-bold uppercase text-stone-400 lg:grid">
                 <span>Fecha</span>
                 <span>Horario</span>
                 <span>Cliente</span>
@@ -172,7 +229,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       appointment.id ??
                       `${appointment.customer_phone}-${appointment.appointment_date}-${appointment.appointment_time}`
                     }
-                    className="grid gap-4 px-5 py-5 text-sm text-stone-100 lg:grid-cols-[0.8fr_0.65fr_1fr_0.95fr_0.95fr_0.65fr_1fr_0.75fr_1.1fr] lg:items-center"
+                    className="grid gap-4 px-5 py-5 text-sm text-stone-100 lg:grid-cols-[0.8fr_0.65fr_1fr_0.95fr_0.95fr_0.65fr_1fr_0.75fr_1.35fr] lg:items-center"
                   >
                     <div>
                       <p className="text-xs font-bold uppercase text-stone-500 lg:hidden">
@@ -222,7 +279,11 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       <p className="text-xs font-bold uppercase text-stone-500 lg:hidden">
                         Estado
                       </p>
-                      <span className="inline-flex rounded-md border border-amber-300/30 bg-amber-300/10 px-2 py-1 text-xs font-bold uppercase text-amber-200">
+                      <span
+                        className={`inline-flex rounded-md border px-2 py-1 text-xs font-bold uppercase ${getStatusClasses(
+                          appointment.status,
+                        )}`}
+                      >
                         {appointment.status}
                       </span>
                     </div>
@@ -230,21 +291,41 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       <p className="text-xs font-bold uppercase text-stone-500 lg:hidden">
                         Acción
                       </p>
-                      <button
-                        type="button"
-                        disabled={
-                          appointment.status === "confirmed" ||
-                          confirmingAppointmentId === appointment.id
-                        }
-                        onClick={() => handleConfirmAppointment(appointment)}
-                        className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-amber-300 px-4 py-2 text-xs font-bold uppercase text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-amber-300 lg:mt-0"
-                      >
-                        {confirmingAppointmentId === appointment.id
-                          ? "Confirmando..."
-                          : appointment.status === "confirmed"
-                            ? "Confirmado"
-                            : "Confirmar por WhatsApp"}
-                      </button>
+                      <div className="mt-2 grid gap-2 lg:mt-0">
+                        <button
+                          type="button"
+                          disabled={
+                            appointment.status === "confirmed" ||
+                            appointment.status === "cancelled" ||
+                            confirmingAppointmentId === appointment.id ||
+                            cancellingAppointmentId === appointment.id
+                          }
+                          onClick={() => handleConfirmAppointment(appointment)}
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-amber-300 px-4 py-2 text-xs font-bold uppercase text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-amber-300"
+                        >
+                          {confirmingAppointmentId === appointment.id
+                            ? "Confirmando..."
+                            : appointment.status === "confirmed"
+                              ? "Confirmado"
+                              : "Confirmar por WhatsApp"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            appointment.status === "cancelled" ||
+                            confirmingAppointmentId === appointment.id ||
+                            cancellingAppointmentId === appointment.id
+                          }
+                          onClick={() => handleCancelAppointment(appointment)}
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-red-300/40 px-4 py-2 text-xs font-bold uppercase text-red-100 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                        >
+                          {cancellingAppointmentId === appointment.id
+                            ? "Cancelando..."
+                            : appointment.status === "cancelled"
+                              ? "Cancelado"
+                              : "Cancelar turno"}
+                        </button>
+                      </div>
                     </div>
                   </article>
                 ))}
