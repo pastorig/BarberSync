@@ -20,7 +20,7 @@ export function AdminLoginForm({ barbershop }: AdminLoginFormProps) {
     event.preventDefault();
 
     if (!email.trim() || !password) {
-      setErrorMessage("Ingresá email y contraseña.");
+      setErrorMessage("Ingresa email y contrasena.");
       return;
     }
 
@@ -34,13 +34,13 @@ export function AdminLoginForm({ barbershop }: AdminLoginFormProps) {
       });
 
       if (error) {
-        setErrorMessage("Email o contraseña incorrectos.");
+        setErrorMessage("Email o contrasena incorrectos.");
         return;
       }
 
       router.replace(`/${barbershop.slug}/admin`);
     } catch {
-      setErrorMessage("No pudimos iniciar sesión. Intentá nuevamente.");
+      setErrorMessage("No pudimos iniciar sesion. Intenta nuevamente.");
     } finally {
       setIsSubmitting(false);
     }
@@ -51,13 +51,14 @@ export function AdminLoginForm({ barbershop }: AdminLoginFormProps) {
       <section className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-10">
         <div className="border border-stone-800 bg-stone-900/70 p-6 shadow-2xl shadow-black/30">
           <p className="text-sm font-semibold uppercase text-amber-300">
-            Panel admin
+            BarberSync
           </p>
           <h1 className="mt-3 text-4xl font-black text-stone-50">
-            {barbershop.name}
+            Panel de administracion
           </h1>
           <p className="mt-3 text-sm leading-6 text-stone-300">
-            Iniciá sesión para gestionar turnos, confirmaciones y cancelaciones.
+            Inicia sesion para gestionar turnos, confirmaciones y cancelaciones
+            desde BarberSync.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
@@ -88,7 +89,7 @@ export function AdminLoginForm({ barbershop }: AdminLoginFormProps) {
                 htmlFor="password"
                 className="text-sm font-bold uppercase text-stone-300"
               >
-                Contraseña
+                Contrasena
               </label>
               <input
                 id="password"
@@ -100,7 +101,7 @@ export function AdminLoginForm({ barbershop }: AdminLoginFormProps) {
                   setErrorMessage("");
                 }}
                 className="mt-2 min-h-12 w-full rounded-md border border-stone-700 bg-stone-950 px-4 text-base text-stone-50 outline-none transition placeholder:text-stone-500 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
-                placeholder="Tu contraseña"
+                placeholder="Tu contrasena"
                 required
               />
             </div>

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SV Barber Turnos",
-  description: "Reservá tu turno online en SV Barber.",
+  title: "BarberSync",
+  description: "Sistema de turnos online para barberias.",
 };
 
 export default function RootLayout({

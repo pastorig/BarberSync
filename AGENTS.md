@@ -2,7 +2,7 @@
 
 ## Reglas generales del proyecto
 
-Este proyecto es un SaaS de turnos para barberias. SV Barber es solo el primer cliente/demo y no debe condicionar la arquitectura general.
+Este proyecto se llama BarberSync. Es un SaaS de turnos para barberias. SV Barber es solo el primer cliente/demo y no debe condicionar la arquitectura general.
 
 - Usar TypeScript en todo el codigo.
 - Usar Next.js con App Router.
@@ -10,57 +10,67 @@ Este proyecto es un SaaS de turnos para barberias. SV Barber es solo el primer c
 - Mantener la estructura `src/` limpia y predecible.
 - Crear componentes reutilizables cuando una pieza de UI pueda repetirse.
 - Evitar hardcodear logica especifica de SV Barber.
-- Pensar siempre en un modelo multi-barberia.
+- Pensar siempre en multi-barberia y multi-barbero.
 - Mantener el codigo escalable, claro y facil de modificar.
-- Separar UI, logica de negocio y datos.
+- Separar UI, logica de negocio, datos e integraciones.
 - Evitar duplicacion de codigo.
-- Priorizar claridad, mantenimiento y buenas practicas por encima de soluciones rapidas.
 - No agregar dependencias innecesarias.
-- No implementar integraciones nuevas hasta que esten definidas en una fase concreta.
+- No implementar features fuera de fase.
+
+## Arquitectura BarberSync
+
+- La home `/` pertenece a BarberSync, no a una barberia cliente.
+- Las paginas publicas de barberia viven en `/[barbershopSlug]`.
+- Las reservas publicas viven en `/[barbershopSlug]/reservar`.
+- El admin de barberia vive en `/[barbershopSlug]/admin`.
+- El login admin vive en `/[barbershopSlug]/admin/login`.
+- En esta fase hay un login admin por barberia.
+- En el futuro existira un panel owner para el dueno de BarberSync.
+- SV Barber debe permanecer como demo en datos, no como marca principal.
 
 ## Skills esperadas del agente
 
 ### Next.js Specialist
 
-- Responsabilidades: definir rutas con App Router, Server Components, Client Components, metadata y convenciones de Next.js.
-- Cuando aplicarla: al crear o modificar rutas publicas, paneles, layouts, navegacion, carga de datos y builds.
-- Buenas practicas: mantener `params` tipados correctamente, usar `notFound()` para slugs invalidos, evitar logica innecesaria en paginas y reutilizar componentes compartidos.
+- Responsabilidades: definir rutas con App Router, Server Components, Client Components, metadata y navegacion.
+- Cuando aplicarla: al crear o modificar home, rutas por slug, login, admin, paginas publicas y builds.
+- Buenas practicas: mantener `params` tipados, usar `notFound()` para slugs invalidos, empujar `use client` lo mas abajo posible y reutilizar componentes.
 
 ### Supabase Specialist
 
-- Responsabilidades: configurar el cliente Supabase, consultas, inserts, errores, variables de entorno y reglas basicas de acceso.
-- Cuando aplicarla: al leer o guardar reservas, conectar tablas, revisar errores de Supabase o preparar futuras integraciones con auth.
-- Buenas practicas: no exponer claves privadas, usar solo publishable key en cliente, manejar errores visualmente y validar que RLS permita unicamente lo necesario.
+- Responsabilidades: configurar cliente Supabase, consultas, inserts, updates, errores, auth y variables de entorno.
+- Cuando aplicarla: al leer o guardar reservas, confirmar, cancelar, bloquear horarios o revisar login.
+- Buenas practicas: no exponer claves privadas, manejar errores visuales, respetar RLS y no abrir WhatsApp si falla un guardado requerido.
 
 ### Database Architect
 
-- Responsabilidades: modelar entidades, columnas, relaciones, indices, restricciones y estados de negocio.
-- Cuando aplicarla: al tocar tablas como `appointments`, agregar barberias, servicios, barberos, clientes o reglas de disponibilidad.
-- Buenas practicas: pensar multi-barberia desde el modelo, indexar `barbershop_slug`, `appointment_date` y `appointment_time`, y evitar columnas atadas a un solo cliente demo.
+- Responsabilidades: modelar entidades, columnas, relaciones, indices, restricciones y estados.
+- Cuando aplicarla: al tocar `appointments`, barberias, barberos, servicios, disponibilidad o futuros planes.
+- Buenas practicas: bloquear turnos activos por `barbershop_slug`, `barber_id`, fecha y hora; indexar consultas frecuentes; evitar columnas atadas a SV Barber.
 
 ### SaaS Architect
 
-- Responsabilidades: proteger la vision multi-tenant, separar configuracion por barberia y evitar acoplamientos a SV Barber.
-- Cuando aplicarla: al disenar nuevas funcionalidades, paneles, planes, permisos o datos configurables por cliente.
-- Buenas practicas: no crear forks por barberia, usar slugs/configuracion, separar dominio de UI y mantener integraciones desacopladas.
+- Responsabilidades: proteger la vision multi-tenant y separar plataforma de cliente.
+- Cuando aplicarla: al modificar home, slugs, admin, login, datos demo o futuras funcionalidades owner.
+- Buenas practicas: no crear forks por barberia, usar configuracion por cliente, mantener BarberSync como marca de plataforma y SV Barber como demo.
 
 ### UI/UX Designer
 
 - Responsabilidades: cuidar experiencia mobile-first, jerarquia visual, formularios, estados y accesibilidad basica.
-- Cuando aplicarla: al crear o ajustar landing, reserva, panel admin y cualquier flujo publico.
-- Buenas practicas: botones tactiles grandes, formularios claros, estados de loading/error/vacio, buen contraste y diseno premium/minimalista.
+- Cuando aplicarla: al ajustar landing, reserva, login, admin y flujos publicos.
+- Buenas practicas: botones tactiles, formularios compactos, estados claros, contraste alto y estetica premium/minimalista.
 
 ### Security Reviewer
 
-- Responsabilidades: revisar exposicion de datos, permisos, RLS, variables de entorno, rutas admin y operaciones sensibles.
-- Cuando aplicarla: antes de publicar rutas admin, inserts publicos, integraciones externas o datos personales.
-- Buenas practicas: asumir que toda ruta publica puede ser visitada, no confiar en el cliente, preparar auth antes de datos sensibles reales y documentar riesgos temporales.
+- Responsabilidades: revisar exposicion de datos, permisos, RLS, variables de entorno, rutas admin y acciones sensibles.
+- Cuando aplicarla: antes de publicar rutas admin, inserts publicos, auth, cancelaciones, confirmaciones o datos personales.
+- Buenas practicas: no confiar solo en el cliente, validar estados, preparar permisos por barberia y documentar riesgos temporales.
 
 ### QA Tester
 
 - Responsabilidades: verificar lint, build, flujos principales, estados vacios, errores y responsive.
-- Cuando aplicarla: antes de cerrar cambios o cuando se modifique reserva, admin, datos o navegacion.
-- Buenas practicas: ejecutar `npm run lint` y `npm run build`, probar slugs validos/invalidos y revisar que WhatsApp solo abra despues de guardar.
+- Cuando aplicarla: antes de finalizar cambios en reserva, admin, login, datos, documentacion o navegacion.
+- Buenas practicas: ejecutar `npm run lint` y `npm run build`, probar slugs validos/invalidos y revisar que las acciones no mezclen responsabilidades.
 
 ### Git Assistant
 
@@ -71,60 +81,57 @@ Este proyecto es un SaaS de turnos para barberias. SV Barber es solo el primer c
 ### WhatsApp Integration Helper
 
 - Responsabilidades: generar links `wa.me`, formatear mensajes y mantener la integracion demo separada de la UI.
-- Cuando aplicarla: al modificar confirmaciones, mensajes, telefonos o futura WhatsApp API.
-- Buenas practicas: limpiar numeros, usar `encodeURIComponent`, no abrir WhatsApp si falla Supabase y preparar una capa separada para API real futura.
+- Cuando aplicarla: al modificar mensajes de reserva, confirmacion, telefonos o futura WhatsApp API.
+- Buenas practicas: limpiar numeros, usar `encodeURIComponent`, separar enviar WhatsApp de confirmar estado y preparar API real desacoplada.
 
 ### Google Calendar Integration Helper
 
 - Responsabilidades: preparar futura sincronizacion de turnos con calendarios externos.
-- Cuando aplicarla: cuando se implemente agenda, bloqueo de horarios, eventos o recordatorios.
-- Buenas practicas: no implementarlo antes de definir auth/permisos, mantenerlo desacoplado y tratar fallas de calendario como integracion externa recuperable.
-
-## Arquitectura esperada
-
-- La UI debe vivir en componentes pequenos y enfocados.
-- La logica de negocio debe estar separada de los componentes visuales.
-- Los datos demo deben poder reemplazarse luego por datos de base de datos sin reescribir la interfaz.
-- Cualquier referencia a servicios, precios, horarios, barberos o datos de contacto debe modelarse pensando en multiples barberias.
-- Las futuras integraciones externas deben aislarse en modulos propios cuando sean implementadas.
-- Evitar mezclar reglas de reserva, renderizado y persistencia en un mismo archivo.
+- Cuando aplicarla: cuando se implemente agenda externa, eventos, recordatorios o bloqueo sincronizado.
+- Buenas practicas: no implementarlo antes de definir auth/permisos, mantenerlo desacoplado y tratar fallas como integracion externa recuperable.
 
 ## Reglas de diseno
 
-- El diseno debe ser responsive de forma obligatoria.
-- La implementacion debe ser mobile-first.
+- Responsive obligatorio.
+- Mobile-first.
 - Debe funcionar correctamente en celular, tablet, notebook y PC.
-- Los botones deben ser grandes, claros y comodos para uso tactil.
-- Los formularios futuros deben estar optimizados para movil.
-- El estilo visual debe sentirse moderno, minimalista y premium.
-- La estetica debe alinearse con barberias modernas: sobria, elegante, directa y confiable.
-- Evitar interfaces recargadas, textos innecesarios o patrones visuales genericos.
-- Mantener buena legibilidad, contraste y jerarquia visual.
+- Botones grandes y comodos para tactil.
+- Formularios optimizados para movil.
+- Admin compacto para uso durante el trabajo.
+- Diseno moderno, minimalista y premium.
+- Estetica sobria de barberia moderna.
+- No usar textos innecesarios dentro de la app.
+- Mantener buena legibilidad, contraste y jerarquia.
 
 ## Restricciones actuales
 
-Implementado en fase demo:
+Implementado actualmente:
 
+- Home general de BarberSync.
 - Landing publica multi-barberia por slug.
-- Formulario de reserva.
+- Formulario de reserva por slug.
 - Guardado de reservas en Supabase.
-- Apertura de WhatsApp mediante link `wa.me`.
-- Panel admin basico sin autenticacion.
+- Bloqueo de horarios ocupados por barbero.
+- Multi-barbero en datos y reservas.
+- WhatsApp demo mediante link `wa.me`.
+- Login admin con Supabase Auth.
+- Panel admin por barberia.
+- Confirmacion, cancelacion y envio separado de WhatsApp.
 
 Por ahora no implementar:
 
-- Autenticacion.
+- Panel owner.
+- Registro de barberias.
+- Gestion visual de barberos.
+- Roles avanzados.
 - Google Calendar.
 - Pagos online.
-- Bloqueo de horarios.
-- Panel multi-barbero.
 - WhatsApp API real.
-
-Riesgo temporal: el panel admin es publico hasta que se implemente autenticacion y politicas RLS adecuadas.
 
 ## Criterios antes de finalizar cambios
 
-- Verificar que el proyecto compile correctamente.
-- Ejecutar lint cuando haya cambios de codigo.
-- No modificar funcionalidades existentes si la tarea solo pide documentacion.
-- Mantener los cambios acotados al objetivo solicitado.
+- Ejecutar `npm run lint`.
+- Ejecutar `npm run build`.
+- Corregir errores si aparecen.
+- Mantener compatibilidad con `/sv-barber`, `/sv-barber/reservar`, `/sv-barber/admin` y `/sv-barber/admin/login`.
+- No romper reservas, Supabase, WhatsApp, admin, login, cancelacion, horarios ocupados ni multi-barbero.

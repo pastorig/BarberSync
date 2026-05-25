@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
+  type Barber,
   getActiveBarbers,
   getBarberDisplayName,
   type DemoBarbershop,
@@ -12,16 +13,20 @@ import {
   listOccupiedAppointmentTimes,
   validateAppointmentTimeIsAvailable,
 } from "@/lib/appointments";
+import { listActiveBarbersByBarbershop } from "@/lib/barbers";
 import {
   formatDateForDisplay,
   formatPrice,
   getLocalDateInputValue,
 } from "@/lib/format";
+import type { BarberRow } from "@/lib/supabase";
 import { createWhatsAppBookingLink } from "@/lib/whatsapp";
 
 type BookingFormProps = {
   barbershop: DemoBarbershop;
 };
+
+type BookingBarber = Barber;
 
 function getTodayInputValue() {
   return getLocalDateInputValue();
@@ -49,11 +54,18 @@ function buildTimeSlots(start: string, end: string, intervalMinutes: number) {
 }
 
 export function BookingForm({ barbershop }: BookingFormProps) {
-  const activeBarbers = useMemo(
+  const demoActiveBarbers = useMemo(
     () => getActiveBarbers(barbershop),
     [barbershop],
   );
-  const initialBarber = activeBarbers[0];
+  const fallbackServices = useMemo(
+    () => demoActiveBarbers[0]?.services ?? [],
+    [demoActiveBarbers],
+  );
+  const initialBarber = demoActiveBarbers[0];
+  const [activeBarbers, setActiveBarbers] =
+    useState<BookingBarber[]>(demoActiveBarbers);
+  const [isLoadingBarbers, setIsLoadingBarbers] = useState(true);
   const [selectedBarberId, setSelectedBarberId] = useState(
     initialBarber?.id ?? "",
   );
@@ -117,6 +129,79 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     setSelectedServiceId(serviceId);
     setFormError("");
   }
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRealBarbers() {
+      setIsLoadingBarbers(true);
+
+      try {
+        const { data, error } = await listActiveBarbersByBarbershop(
+          barbershop.slug,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (error) {
+          setActiveBarbers(demoActiveBarbers);
+          setFormError(
+            "No pudimos cargar los barberos reales. Mostramos la demo temporalmente.",
+          );
+          return;
+        }
+
+        const nextBarbers =
+          data && data.length > 0
+            ? data.map((barber: BarberRow) => {
+                const demoBarber = demoActiveBarbers.find(
+                  (currentBarber) => currentBarber.id === barber.id,
+                );
+
+                return {
+                  id: barber.id,
+                  name: barber.name,
+                  role: barber.role ?? undefined,
+                  displayName: barber.display_name ?? undefined,
+                  whatsapp: barber.whatsapp ?? undefined,
+                  isActive: barber.is_active,
+                  services: demoBarber?.services ?? fallbackServices,
+                };
+              })
+            : demoActiveBarbers;
+
+        setActiveBarbers(nextBarbers);
+        setSelectedBarberId((currentBarberId) => {
+          const nextSelectedBarber =
+            nextBarbers.find((barber) => barber.id === currentBarberId) ??
+            nextBarbers[0];
+
+          setSelectedServiceId(nextSelectedBarber?.services[0]?.id ?? "");
+
+          return nextSelectedBarber?.id ?? "";
+        });
+      } catch {
+        if (isMounted) {
+          setActiveBarbers(demoActiveBarbers);
+          setFormError(
+            "No pudimos cargar los barberos reales. Mostramos la demo temporalmente.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingBarbers(false);
+        }
+      }
+    }
+
+    loadRealBarbers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [barbershop.slug, demoActiveBarbers, fallbackServices]);
 
   useEffect(() => {
     let isMounted = true;
@@ -295,6 +380,12 @@ export function BookingForm({ barbershop }: BookingFormProps) {
         </div>
 
         <div className="space-y-3 sm:space-y-4">
+          {isLoadingBarbers ? (
+            <div className="rounded-md border border-stone-800 bg-stone-900/60 px-3 py-2 text-sm font-semibold text-stone-300">
+              Cargando barberos disponibles...
+            </div>
+          ) : null}
+
           {activeBarbers.length > 1 ? (
             <div>
               <label
@@ -339,7 +430,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
             <select
               id="service"
               value={selectedService?.id ?? ""}
-              disabled={isSaving || !selectedBarber}
+              disabled={isSaving || isLoadingBarbers || !selectedBarber}
               onChange={(event) => handleServiceChange(event.target.value)}
               className="mt-1.5 min-h-10 w-full rounded-md border border-stone-700 bg-stone-900 px-3 text-base text-stone-50 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20 sm:mt-2 sm:min-h-12 sm:px-4"
               required
@@ -350,6 +441,11 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                 </option>
               ))}
             </select>
+            {!isLoadingBarbers && selectedBarber && availableServices.length === 0 ? (
+              <p className="mt-2 text-xs font-semibold text-red-200">
+                Este barbero todavia no tiene servicios configurados.
+              </p>
+            ) : null}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">

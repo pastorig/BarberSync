@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-type AppointmentStatus = "pending" | "confirmed" | "cancelled";
+type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "deleted";
 
 type AppointmentInsert = {
   barbershop_slug: string;
@@ -20,8 +20,26 @@ type AppointmentInsert = {
 type AppointmentRow = Omit<AppointmentInsert, "status"> & {
   id?: string;
   created_at?: string;
-  status: string;
+  status: AppointmentStatus;
 };
+
+type BarberInsert = {
+  barbershop_slug: string;
+  name: string;
+  display_name: string | null;
+  role: string | null;
+  whatsapp: string | null;
+  is_active: boolean;
+  deleted_at?: string | null;
+};
+
+type BarberRow = BarberInsert & {
+  id: string;
+  created_at: string;
+  deleted_at: string | null;
+};
+
+type BarberUpdate = Partial<BarberInsert>;
 
 type Database = {
   public: {
@@ -30,6 +48,12 @@ type Database = {
         Row: AppointmentRow;
         Insert: AppointmentInsert;
         Update: Partial<AppointmentInsert>;
+        Relationships: [];
+      };
+      barbers: {
+        Row: BarberRow;
+        Insert: BarberInsert;
+        Update: BarberUpdate;
         Relationships: [];
       };
     };
@@ -63,4 +87,11 @@ export function getSupabaseClient() {
   return supabaseClient;
 }
 
-export type { AppointmentInsert, AppointmentRow, AppointmentStatus };
+export type {
+  AppointmentInsert,
+  AppointmentRow,
+  AppointmentStatus,
+  BarberInsert,
+  BarberRow,
+  BarberUpdate,
+};

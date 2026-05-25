@@ -2,15 +2,22 @@
 
 ## Objetivo general
 
-SV Barber Turnos es la base de un SaaS de gestion de turnos para barberias. El sistema debe permitir que una barberia publique sus servicios, horarios disponibles y barberos, y que sus clientes puedan reservar turnos de forma simple desde una experiencia web optimizada para movil.
+BarberSync es un SaaS de gestion de turnos para barberias. La plataforma permite que cada barberia publique una pagina publica, reciba reservas online, administre su agenda y trabaje con uno o varios barberos sin duplicar proyectos por cliente.
 
-El objetivo no es construir una solucion exclusiva para una sola barberia, sino una plataforma reutilizable para multiples barberias, donde cada negocio pueda tener su propia configuracion, identidad, servicios y reglas operativas.
+El objetivo del producto es ordenar reservas, reducir ausencias y dar a las barberias una herramienta mobile-first, rapida y profesional para operar durante el dia de trabajo.
 
 ## Vision SaaS multi-barberia
 
-La vision del producto es ofrecer una plataforma escalable para barberias que necesitan organizar reservas, reducir ausencias, ordenar horarios y mejorar la comunicacion con clientes.
+BarberSync debe funcionar como una plataforma multi-tenant:
 
-Cada barberia debera poder tener:
+- La home `/` pertenece a BarberSync como producto.
+- Cada barberia tiene una pagina publica por slug, por ejemplo `/sv-barber`.
+- Cada barberia tiene su flujo de reserva por slug, por ejemplo `/sv-barber/reservar`.
+- Cada barberia tiene su panel admin por slug, por ejemplo `/sv-barber/admin`.
+- En esta fase se mantiene un login admin por barberia.
+- En el futuro existira un panel owner para el dueno de la plataforma BarberSync.
+
+Cada barberia debe poder tener:
 
 - Nombre.
 - Servicios.
@@ -19,197 +26,143 @@ Cada barberia debera poder tener:
 - Barberos.
 - Instagram.
 - WhatsApp.
-- Configuracion de duracion de turnos.
 - Reglas de cancelacion.
-- Mensajes y recordatorios personalizados.
+- Configuracion de duracion de turnos.
 
-La arquitectura debe pensarse desde el inicio como multi-tenant: una misma aplicacion debe poder servir a varias barberias sin duplicar codigo ni crear proyectos separados por cliente.
+## SV Barber como cliente demo
 
-## SV Barber como demo inicial
+SV Barber es solo el primer cliente/demo de BarberSync. Sus datos sirven para validar la experiencia publica, el flujo de reserva y el panel admin.
 
-SV Barber sera el primer cliente/demo del sistema. Su landing inicial sirve para validar la experiencia basica de reserva y presentar el estilo visual del producto.
+SV Barber no debe tratarse como marca principal del producto ni como caso unico. Cualquier referencia a SV Barber debe vivir como dato de barberia demo o contexto puntual de una ruta por slug.
 
-SV Barber no debe quedar hardcodeado como unica barberia del sistema. Cualquier dato de SV Barber debe considerarse informacion demo o configuracion inicial reemplazable por datos dinamicos en futuras fases.
+Datos demo actuales:
 
-Datos demo iniciales:
-
-- Nombre: SV Barber.
-- Texto principal: Reserva tu turno online.
-- Servicio: Corte - $8500.
-- Servicio: Corte + barba - $10000.
+- Barberia: SV Barber.
+- Slug: `sv-barber`.
+- Barbero: Santi Vargas.
+- Servicio: Corte - $8500 - 30 minutos.
+- Servicio: Corte + barba - $10000 - 30 minutos.
 - Horario inicial: 16:00 a 21:00.
-- Duracion inicial de turno: 30 minutos.
+- Intervalos: 30 minutos.
 
-## MVP 1 actual
+## MVP actual
 
-El MVP 1 actual es una base tecnica y visual minima:
+El MVP actual incluye:
 
-- Proyecto Next.js con TypeScript.
-- App Router.
-- Tailwind CSS.
-- ESLint.
-- Estructura `src/`.
-- Landing inicial simple para SV Barber.
-- Documentacion de producto y reglas de desarrollo.
-
-Este MVP no incluye todavia persistencia, integraciones, autenticacion ni paneles funcionales.
-
-## Futuras funcionalidades
-
-Funcionalidades previstas para fases posteriores:
-
-- Flujo completo de reserva online.
-- Seleccion de servicio.
-- Seleccion de barbero.
-- Seleccion de fecha y horario.
-- Confirmacion del turno.
-- Panel admin para barberias.
-- Panel de gestion de servicios.
-- Panel de horarios.
-- Panel de barberos.
-- Estadisticas de reservas.
-- Recordatorios automaticos.
-- WhatsApp API.
-- Google Calendar.
-- Pagos online.
-- Sistema de fidelizacion.
-- Descuentos y promociones.
-- Historial de clientes.
-- Control de ausencias.
-- Reglas personalizadas por barberia.
-- Multiples barberos por barberia.
+- Next.js con App Router, TypeScript, Tailwind CSS y ESLint.
+- Home general de BarberSync.
+- Landing publica por barberia.
+- Formulario publico de reserva.
+- Integracion con Supabase para guardar reservas.
+- Bloqueo de horarios ocupados por barberia, fecha y barbero.
+- Multi-barbero en datos demo y reservas.
+- Apertura de WhatsApp por link `wa.me`.
+- Login admin con Supabase Auth.
+- Panel admin por barberia.
+- Confirmacion y cancelacion de turnos.
+- Accion separada para enviar WhatsApp al cliente.
 
 ## Reglas de negocio
 
-Reglas iniciales del dominio:
-
-- Los turnos demo funcionan de 16:00 a 21:00.
-- La duracion demo de cada turno es de 30 minutos.
-- Los servicios demo son Corte y Corte + barba.
-- La cancelacion debe realizarse como minimo 1 hora antes del turno.
-- Los clientes que faltan sin avisar pueden perder prioridad en reservas futuras.
-- Los barberos podran modificar la duracion de los turnos.
-- Una barberia debe poder definir sus propios horarios.
-- Una barberia debe poder definir sus propios servicios y precios.
-- Una barberia debe poder activar o desactivar barberos.
-- En el futuro, un turno no deberia poder reservarse dos veces para el mismo barbero y horario.
-- En el futuro, cada barberia podria definir reglas distintas de disponibilidad, anticipacion y cancelacion.
+- Un turno activo puede tener estado `pending` o `confirmed`.
+- Un turno `cancelled` no debe bloquear horarios.
+- Los horarios ocupados se bloquean por `barbershop_slug`, `barber_id`, fecha y hora.
+- La cancelacion minima recomendada es 1 hora antes.
+- Clientes que faltan sin avisar pueden perder prioridad en futuras reservas.
+- Cada barbero puede tener sus propios servicios, precios y duraciones.
+- Una barberia puede activar o desactivar barberos.
+- La barberia demo usa turnos de 30 minutos entre 16:00 y 21:00.
 
 ## Flujo completo de reserva
 
-Flujo objetivo para una reserva online:
+1. El cliente entra a la pagina publica de una barberia por slug.
+2. El sistema muestra identidad, servicios y llamado a reservar.
+3. El cliente entra a `/[barbershopSlug]/reservar`.
+4. Si hay un barbero activo, el sistema lo selecciona automaticamente.
+5. Si hay varios barberos activos, el cliente selecciona barbero.
+6. Los servicios disponibles dependen del barbero seleccionado.
+7. El cliente elige fecha y horario.
+8. BarberSync consulta Supabase para bloquear horarios ocupados del barbero.
+9. El cliente completa nombre, telefono y comentario opcional.
+10. El sistema valida campos y disponibilidad.
+11. Si la disponibilidad sigue libre, guarda el turno en Supabase.
+12. Si el guardado funciona, abre WhatsApp con el mensaje de reserva.
+13. La barberia ve el turno en su panel admin.
 
-1. El cliente entra a la pagina publica de una barberia.
-2. El sistema muestra nombre, servicios, precios y disponibilidad.
-3. El cliente selecciona un servicio.
-4. El cliente selecciona un barbero, si la barberia tiene mas de uno.
-5. El cliente selecciona fecha.
-6. El sistema calcula horarios disponibles segun duracion, horario de atencion y turnos ya reservados.
-7. El cliente selecciona un horario.
-8. El cliente completa sus datos basicos.
-9. El sistema muestra un resumen del turno.
-10. El cliente confirma la reserva.
-11. El sistema registra el turno.
-12. El cliente recibe confirmacion.
-13. La barberia visualiza el turno en su panel.
+## Flujo admin actual
 
-En el MVP actual solo existe la landing inicial. Este flujo se documenta como direccion futura.
+1. El admin entra a `/[barbershopSlug]/admin`.
+2. Si no tiene sesion, se redirige a `/[barbershopSlug]/admin/login`.
+3. El login muestra BarberSync como marca principal y la barberia como contexto.
+4. El panel lista turnos de la barberia.
+5. El admin puede confirmar un turno con el boton `Confirmar turno`.
+6. El admin puede enviar un mensaje con `Enviar WhatsApp`.
+7. Confirmar turno no abre WhatsApp.
+8. Enviar WhatsApp no cambia el estado.
+9. El admin puede cancelar turnos.
+10. Los turnos cancelados quedan visibles, pero no bloquean disponibilidad.
 
-## Flujo futuro de confirmacion por WhatsApp
+## Flujo futuro de WhatsApp API
 
-Flujo esperado cuando se implemente WhatsApp:
+La integracion actual usa links `wa.me`. En el futuro, WhatsApp API debera:
 
-1. El cliente confirma una reserva desde la web.
-2. El sistema guarda el turno con estado pendiente o confirmado segun la regla de la barberia.
-3. El sistema genera un mensaje con barberia, servicio, barbero, fecha, hora y politica de cancelacion.
-4. El sistema envia la confirmacion por WhatsApp API.
-5. El cliente puede recibir botones o instrucciones para confirmar, cancelar o reprogramar.
-6. El sistema registra la respuesta del cliente.
-7. Si el cliente cancela con mas de 1 hora de anticipacion, el horario vuelve a estar disponible.
-8. Si el cliente cancela tarde o no asiste, el sistema puede marcar el evento para reglas de prioridad futuras.
-
-WhatsApp no debe implementarse en esta fase.
+- Enviar confirmaciones automaticas.
+- Enviar recordatorios.
+- Permitir respuestas del cliente.
+- Registrar confirmaciones, cancelaciones o reprogramaciones.
+- Mantener los mensajes desacoplados de la UI.
 
 ## Estructura futura de paneles
 
+Home BarberSync:
+
+- Presentacion general del producto.
+- Acceso a login.
+- Acceso a demos o futuras paginas comerciales.
+
 Panel publico de barberia:
 
-- Landing de la barberia.
-- Listado de servicios.
+- Landing por slug.
+- Servicios.
+- Barberos.
 - Flujo de reserva.
 - Informacion de contacto.
-- Enlaces a Instagram y WhatsApp.
 
 Panel admin de barberia:
 
-- Resumen del dia.
-- Calendario o agenda de turnos.
-- Gestion de servicios.
-- Gestion de precios.
-- Gestion de horarios.
-- Gestion de barberos.
-- Gestion de clientes.
-- Estadisticas.
-- Configuracion de integraciones.
+- Resumen por fecha.
+- Agenda de turnos.
+- Confirmacion.
+- Cancelacion.
+- Envio de WhatsApp.
+- Futura gestion de servicios, horarios y barberos.
 
-Panel interno SaaS:
+Panel owner futuro:
 
-- Gestion de barberias.
-- Estado de clientes.
-- Planes o suscripciones futuras.
-- Configuracion global.
+- Gestion de barberias cliente.
+- Altas privadas.
+- Planes y suscripciones.
 - Monitoreo de uso.
+- Configuracion global de BarberSync.
 
-Ningun panel admin funcional debe implementarse todavia.
+## Integraciones futuras
 
-## Posibles integraciones futuras
-
-Integraciones previstas:
-
-- Supabase para base de datos, autenticacion y storage si se define como stack final.
-- WhatsApp API para confirmaciones, recordatorios y cancelaciones.
-- Google Calendar para sincronizacion de agenda.
-- Pasarelas de pago para senas o pagos online.
-- Servicios de email transaccional.
-- Analitica para conversiones y uso del sistema.
-- Herramientas de observabilidad y monitoreo.
-
-Estas integraciones deben mantenerse desacopladas de la UI y encapsuladas en modulos propios.
-
-## Arquitectura general del sistema
-
-La arquitectura objetivo debe separar:
-
-- Presentacion: componentes de UI y paginas.
-- Dominio: reglas de negocio de reservas, horarios, servicios y barberos.
-- Datos: origen de datos demo, base de datos futura o APIs.
-- Integraciones: WhatsApp, Google Calendar, pagos y otros servicios externos.
-- Configuracion por barberia: branding, servicios, horarios, barberos y canales de contacto.
-
-Modelo conceptual inicial:
-
-- Barberia.
-- Servicio.
-- Barbero.
-- Horario de atencion.
-- Turno.
-- Cliente.
-- Integracion.
-- Regla de negocio.
-
-La aplicacion debe permitir avanzar desde datos estaticos demo hacia datos persistidos sin reescribir la experiencia principal.
+- WhatsApp API real.
+- Google Calendar.
+- Pagos online.
+- Emails transaccionales.
+- Analitica.
+- Observabilidad.
+- Gestion visual de barberias, servicios y barberos.
 
 ## Enfoque escalable
 
-El proyecto debe crecer con una mentalidad SaaS:
+BarberSync debe crecer sin atarse a SV Barber:
 
-- Multi-barberia desde el modelo de datos.
-- Configuracion por cliente, no forks por cliente.
-- Componentes compartidos.
-- Reglas de negocio centralizadas.
-- Integraciones desacopladas.
-- UI reusable para distintos perfiles.
-- Soporte para multiples barberos y servicios.
-- Preparacion para planes, limites y funcionalidades premium.
-
-El primer objetivo tecnico es evitar decisiones que aten el sistema a SV Barber como caso unico. La demo debe validar la experiencia, pero la arquitectura debe preparar el camino para que nuevas barberias puedan incorporarse con configuracion propia.
+- Configuracion por barberia.
+- Slugs como frontera publica y admin.
+- Datos de servicios y barberos modelados por cliente.
+- Helpers de Supabase separados de la UI.
+- Integraciones encapsuladas en `src/lib`.
+- Componentes reutilizables y mobile-first.
+- Preparacion para roles, owner panel y planes comerciales.

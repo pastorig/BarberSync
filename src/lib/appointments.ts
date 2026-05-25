@@ -1,6 +1,7 @@
 import {
   getSupabaseClient,
   type AppointmentInsert,
+  type AppointmentStatus,
 } from "@/lib/supabase";
 
 type AppointmentDraft = Omit<AppointmentInsert, "status">;
@@ -14,7 +15,7 @@ type AppointmentTimeInput = AppointmentAvailabilityInput & {
   appointmentTime: string;
 };
 
-const activeAppointmentStatuses = ["pending", "confirmed"];
+const activeAppointmentStatuses: AppointmentStatus[] = ["pending", "confirmed"];
 
 export async function createPendingAppointment(appointment: AppointmentDraft) {
   return getSupabaseClient()
@@ -30,6 +31,20 @@ export async function confirmAppointment(appointmentId: string) {
 }
 
 export async function cancelAppointment(appointmentId: string) {
+  return getSupabaseClient()
+    .from("appointments")
+    .update({ status: "cancelled" })
+    .eq("id", appointmentId);
+}
+
+export async function deleteAppointment(appointmentId: string) {
+  return getSupabaseClient()
+    .from("appointments")
+    .update({ status: "deleted" })
+    .eq("id", appointmentId);
+}
+
+export async function restoreDeletedAppointment(appointmentId: string) {
   return getSupabaseClient()
     .from("appointments")
     .update({ status: "cancelled" })
