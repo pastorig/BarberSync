@@ -426,7 +426,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
         return;
       }
 
-      router.replace(`/${barbershop.slug}/admin/login`);
+      router.replace("/login");
     } catch {
       setErrorMessage("No pudimos cerrar sesión.");
     } finally {
