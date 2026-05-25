@@ -21,6 +21,13 @@ export async function createPendingAppointment(appointment: AppointmentDraft) {
     .insert({ ...appointment, status: "pending" });
 }
 
+export async function confirmAppointment(appointmentId: string) {
+  return getSupabaseClient()
+    .from("appointments")
+    .update({ status: "confirmed" })
+    .eq("id", appointmentId);
+}
+
 export async function listAppointmentsByBarbershop(barbershopSlug: string) {
   const { data, error } = await getSupabaseClient()
     .from("appointments")

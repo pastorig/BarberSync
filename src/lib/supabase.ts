@@ -10,7 +10,7 @@ type AppointmentInsert = {
   appointment_date: string;
   appointment_time: string;
   comment: string;
-  status: "pending";
+  status: "pending" | "confirmed";
 };
 
 type AppointmentRow = Omit<AppointmentInsert, "status"> & {

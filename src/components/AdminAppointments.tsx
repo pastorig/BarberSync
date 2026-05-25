@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from "react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
-import { listAppointmentsByBarbershop } from "@/lib/appointments";
+import {
+  confirmAppointment,
+  listAppointmentsByBarbershop,
+} from "@/lib/appointments";
 import { formatDateForDisplay, formatPrice } from "@/lib/format";
 import type { AppointmentRow } from "@/lib/supabase";
+import { createWhatsAppConfirmationLink } from "@/lib/whatsapp";
 
 type AdminAppointmentsProps = {
   barbershop: DemoBarbershop;
@@ -14,6 +18,51 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [confirmingAppointmentId, setConfirmingAppointmentId] = useState<
+    string | null
+  >(null);
+
+  async function handleConfirmAppointment(appointment: AppointmentRow) {
+    if (!appointment.id) {
+      setErrorMessage("No pudimos identificar la reserva.");
+      return;
+    }
+
+    setErrorMessage("");
+    setConfirmingAppointmentId(appointment.id);
+
+    try {
+      const { error } = await confirmAppointment(appointment.id);
+
+      if (error) {
+        setErrorMessage("No pudimos confirmar la reserva.");
+        return;
+      }
+
+      setAppointments((currentAppointments) =>
+        currentAppointments.map((currentAppointment) =>
+          currentAppointment.id === appointment.id
+            ? { ...currentAppointment, status: "confirmed" }
+            : currentAppointment,
+        ),
+      );
+
+      const whatsappLink = createWhatsAppConfirmationLink({
+        barbershopName: barbershop.name,
+        clientName: appointment.customer_name,
+        clientPhone: appointment.customer_phone,
+        serviceName: appointment.service_name,
+        date: formatDateForDisplay(appointment.appointment_date),
+        time: appointment.appointment_time,
+      });
+
+      window.open(whatsappLink, "_blank", "noopener,noreferrer");
+    } catch {
+      setErrorMessage("No pudimos confirmar la reserva.");
+    } finally {
+      setConfirmingAppointmentId(null);
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -104,7 +153,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
 
           {!isLoading && !errorMessage && appointments.length > 0 ? (
             <div className="overflow-hidden border border-stone-800 bg-stone-900/70">
-              <div className="hidden grid-cols-[0.9fr_0.7fr_1.1fr_1fr_1fr_0.7fr_1.2fr_0.7fr] gap-4 border-b border-stone-800 px-5 py-4 text-xs font-bold uppercase text-stone-400 lg:grid">
+              <div className="hidden grid-cols-[0.8fr_0.65fr_1fr_0.95fr_0.95fr_0.65fr_1fr_0.75fr_1.1fr] gap-4 border-b border-stone-800 px-5 py-4 text-xs font-bold uppercase text-stone-400 lg:grid">
                 <span>Fecha</span>
                 <span>Horario</span>
                 <span>Cliente</span>
@@ -113,6 +162,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                 <span>Precio</span>
                 <span>Comentario</span>
                 <span>Estado</span>
+                <span>Acción</span>
               </div>
 
               <div className="divide-y divide-stone-800">
@@ -122,7 +172,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       appointment.id ??
                       `${appointment.customer_phone}-${appointment.appointment_date}-${appointment.appointment_time}`
                     }
-                    className="grid gap-4 px-5 py-5 text-sm text-stone-100 lg:grid-cols-[0.9fr_0.7fr_1.1fr_1fr_1fr_0.7fr_1.2fr_0.7fr] lg:items-center"
+                    className="grid gap-4 px-5 py-5 text-sm text-stone-100 lg:grid-cols-[0.8fr_0.65fr_1fr_0.95fr_0.95fr_0.65fr_1fr_0.75fr_1.1fr] lg:items-center"
                   >
                     <div>
                       <p className="text-xs font-bold uppercase text-stone-500 lg:hidden">
@@ -175,6 +225,26 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       <span className="inline-flex rounded-md border border-amber-300/30 bg-amber-300/10 px-2 py-1 text-xs font-bold uppercase text-amber-200">
                         {appointment.status}
                       </span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold uppercase text-stone-500 lg:hidden">
+                        Acción
+                      </p>
+                      <button
+                        type="button"
+                        disabled={
+                          appointment.status === "confirmed" ||
+                          confirmingAppointmentId === appointment.id
+                        }
+                        onClick={() => handleConfirmAppointment(appointment)}
+                        className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-amber-300 px-4 py-2 text-xs font-bold uppercase text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-amber-300 lg:mt-0"
+                      >
+                        {confirmingAppointmentId === appointment.id
+                          ? "Confirmando..."
+                          : appointment.status === "confirmed"
+                            ? "Confirmado"
+                            : "Confirmar por WhatsApp"}
+                      </button>
                     </div>
                   </article>
                 ))}

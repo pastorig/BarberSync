@@ -9,6 +9,15 @@ type WhatsAppBookingLinkInput = {
   comment?: string;
 };
 
+type WhatsAppConfirmationLinkInput = {
+  barbershopName: string;
+  clientName: string;
+  clientPhone: string;
+  serviceName: string;
+  date: string;
+  time: string;
+};
+
 function normalizeWhatsAppPhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
@@ -37,6 +46,29 @@ export function createWhatsAppBookingLink({
   if (comment?.trim()) {
     messageLines.push(`Comentario: ${comment.trim()}`);
   }
+
+  return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(
+    messageLines.join("\n"),
+  )}`;
+}
+
+export function createWhatsAppConfirmationLink({
+  barbershopName,
+  clientName,
+  clientPhone,
+  serviceName,
+  date,
+  time,
+}: WhatsAppConfirmationLinkInput) {
+  const normalizedPhone = normalizeWhatsAppPhone(clientPhone);
+  const messageLines = [
+    `Hola ${clientName}, te confirmamos tu turno en ${barbershopName}.`,
+    `Servicio: ${serviceName}`,
+    `Fecha: ${date}`,
+    `Horario: ${time}`,
+    "",
+    "Por favor, avisa con al menos 1 hora de anticipacion si necesitas cancelar.",
+  ];
 
   return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(
     messageLines.join("\n"),
