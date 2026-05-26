@@ -22,6 +22,8 @@ export function OwnerDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
+  const [hardDeletingSlug, setHardDeletingSlug] = useState<string | null>(null);
+  const [reactivatingSlug, setReactivatingSlug] = useState<string | null>(null);
   const [resettingAccessSlug, setResettingAccessSlug] = useState<string | null>(
     null,
   );
@@ -116,6 +118,121 @@ export function OwnerDashboard() {
       setErrorMessage("No pudimos eliminar la barberia.");
     } finally {
       setDeletingSlug(null);
+    }
+  }
+
+  async function handleHardDeleteBarbershop(slug: string) {
+    // Doble confirmación: ireversible.
+    const firstConfirm = window.confirm(
+      `¿Eliminar DEFINITIVAMENTE la barbería ${slug}?\n\nSe borran todos los turnos, barberos, servicios y horarios. NO se puede deshacer.`,
+    );
+    if (!firstConfirm) return;
+
+    const secondConfirm = window.prompt(
+      `Para confirmar, escribí exactamente el slug: ${slug}`,
+    );
+    if (secondConfirm !== slug) {
+      setErrorMessage(
+        secondConfirm === null
+          ? ""
+          : "El slug no coincide. Eliminación cancelada.",
+      );
+      return;
+    }
+
+    const removeAdminUser = window.confirm(
+      `¿También querés liberar el email del admin (eliminarlo de Supabase Auth)?\n\nOK = sí, libera el email para reuso.\nCancelar = no, el user queda pero sin barbería asociada.`,
+    );
+
+    setErrorMessage("");
+    setHardDeletingSlug(slug);
+
+    try {
+      const { data } = await getCurrentSession();
+      const accessToken = data.session?.access_token;
+
+      if (!accessToken) {
+        setErrorMessage("La sesión no es válida. Ingresá nuevamente.");
+        return;
+      }
+
+      const response = await fetch("/api/owner/hard-delete-barbershop", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ slug, removeAdminUser }),
+      });
+
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setErrorMessage(
+          result.error ?? "No pudimos eliminar definitivamente la barbería.",
+        );
+        return;
+      }
+
+      setMetrics((currentMetrics) => ({
+        ...currentMetrics,
+        knownBarbershopsCount: Math.max(
+          currentMetrics.knownBarbershopsCount - 1,
+          0,
+        ),
+        barbershops: currentMetrics.barbershops.filter(
+          (barbershop) => barbershop.slug !== slug,
+        ),
+      }));
+    } catch {
+      setErrorMessage("No pudimos eliminar definitivamente la barbería.");
+    } finally {
+      setHardDeletingSlug(null);
+    }
+  }
+
+  async function handleReactivateBarbershop(slug: string) {
+    setErrorMessage("");
+    setReactivatingSlug(slug);
+
+    try {
+      const { data } = await getCurrentSession();
+      const accessToken = data.session?.access_token;
+
+      if (!accessToken) {
+        setErrorMessage("La sesión no es válida. Ingresá nuevamente.");
+        return;
+      }
+
+      const response = await fetch("/api/owner/reactivate-barbershop", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ slug }),
+      });
+
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setErrorMessage(result.error ?? "No pudimos reactivar la barbería.");
+        return;
+      }
+
+      // Marcamos como activa en el state local.
+      setMetrics((currentMetrics) => ({
+        ...currentMetrics,
+        barbershops: currentMetrics.barbershops.map((barbershop) =>
+          barbershop.slug === slug
+            ? { ...barbershop, isActive: true }
+            : barbershop,
+        ),
+      }));
+    } catch {
+      setErrorMessage("No pudimos reactivar la barbería.");
+    } finally {
+      setReactivatingSlug(null);
     }
   }
 
@@ -258,19 +375,19 @@ export function OwnerDashboard() {
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase text-[color:var(--brand-gold)]">
-                    Barberias
+                    Barberias activas
                   </p>
                   <h2 className="mt-1 text-2xl font-black text-white">
                     Listado general
                   </h2>
                 </div>
                 <div className="rounded-md border border-[color:var(--border-default)] bg-black px-3 py-2 text-xs text-[color:var(--text-muted)]">
-                  {metrics.barbershops.length} conocidas
+                  {metrics.barbershops.filter((b) => b.isActive).length} activas
                 </div>
               </div>
 
               <div className="mt-4 grid gap-3">
-                {metrics.barbershops.map((barbershop) => {
+                {metrics.barbershops.filter((b) => b.isActive).map((barbershop) => {
                   const resetCredentials =
                     resetCredentialsBySlug[barbershop.slug];
 
@@ -372,6 +489,78 @@ export function OwnerDashboard() {
                 })}
               </div>
             </section>
+
+            {/* Sección Inactivas — solo aparece si hay barberías soft-deleted */}
+            {metrics.barbershops.some((b) => !b.isActive) ? (
+              <section className="mt-5 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-3 shadow-xl shadow-black/20 sm:mt-8 sm:p-5">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-[color:var(--text-subtle)]">
+                      Soft-deleted
+                    </p>
+                    <h2 className="mt-1 text-2xl font-black text-[color:var(--text-secondary)]">
+                      Barberías inactivas
+                    </h2>
+                    <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                      Siguen ocupando su slug. Reactivá para volver a usarlas o
+                      eliminá definitivamente para liberar el slug.
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-[color:var(--border-default)] bg-black px-3 py-2 text-xs text-[color:var(--text-muted)]">
+                    {metrics.barbershops.filter((b) => !b.isActive).length}{" "}
+                    inactivas
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3">
+                  {metrics.barbershops
+                    .filter((b) => !b.isActive)
+                    .map((barbershop) => (
+                      <article
+                        key={barbershop.slug}
+                        className="rounded-lg border border-dashed border-[color:var(--border-default)] bg-black/40 p-4"
+                      >
+                        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                          <div>
+                            <h3 className="text-base font-bold text-[color:var(--text-secondary)] line-through decoration-[color:var(--text-subtle)]">
+                              {barbershop.name}
+                            </h3>
+                            <p className="mt-1 text-xs font-semibold uppercase text-[color:var(--text-subtle)]">
+                              /{barbershop.slug}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 sm:w-72">
+                            <button
+                              type="button"
+                              disabled={reactivatingSlug === barbershop.slug}
+                              onClick={() =>
+                                handleReactivateBarbershop(barbershop.slug)
+                              }
+                              className="inline-flex min-h-10 items-center justify-center rounded-md border border-[color:var(--success)]/40 px-3 py-2 text-center text-xs font-bold uppercase text-[color:var(--success)] transition hover:bg-[color:var(--success-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {reactivatingSlug === barbershop.slug
+                                ? "Reactivando..."
+                                : "Reactivar"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={hardDeletingSlug === barbershop.slug}
+                              onClick={() =>
+                                handleHardDeleteBarbershop(barbershop.slug)
+                              }
+                              className="inline-flex min-h-10 items-center justify-center rounded-md border border-[color:var(--danger)]/40 px-3 py-2 text-center text-xs font-bold uppercase text-[color:var(--danger)] transition hover:bg-[color:var(--danger-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {hardDeletingSlug === barbershop.slug
+                                ? "Eliminando..."
+                                : "Eliminar def."}
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                </div>
+              </section>
+            ) : null}
           </>
         ) : null}
       </section>

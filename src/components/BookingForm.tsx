@@ -611,37 +611,44 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                 No hay horarios disponibles para esta fecha.
               </p>
             ) : (
-              <div
-                role="radiogroup"
-                aria-label="Horarios disponibles"
-                className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5"
-              >
-                {availabilitySlots.map((slot) => {
-                  const isSelected = slot.time === selectedTime;
-                  const title = SLOT_REASON_TITLE[slot.reason] || undefined;
-                  return (
-                    <button
-                      key={slot.time}
-                      type="button"
-                      role="radio"
-                      aria-checked={isSelected}
-                      disabled={!slot.isAvailable || isSaving}
-                      onClick={() => handleSlotSelect(slot)}
-                      title={title}
-                      className={cn(
-                        "min-h-11 rounded-[var(--radius-sm)] border font-mono text-xs font-bold tabular-nums transition-colors duration-[var(--duration-fast)]",
-                        isSelected
-                          ? "border-[color:var(--brand-gold)] bg-[color:var(--brand-gold)] text-black"
-                          : slot.isAvailable
-                            ? "border-[color:var(--border-default)] text-white hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)]"
-                            : "cursor-not-allowed border-[color:var(--border-subtle)] text-[color:var(--text-subtle)] line-through",
-                      )}
-                    >
-                      {slot.time}
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                <div
+                  role="radiogroup"
+                  aria-label="Horarios disponibles"
+                  className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5"
+                >
+                  {availabilitySlots.map((slot) => {
+                    const isSelected = slot.time === selectedTime;
+                    const title = SLOT_REASON_TITLE[slot.reason] || undefined;
+                    return (
+                      <button
+                        key={slot.time}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        disabled={!slot.isAvailable || isSaving}
+                        onClick={() => handleSlotSelect(slot)}
+                        title={title}
+                        className={cn(
+                          "min-h-11 rounded-[var(--radius-sm)] border font-mono text-xs font-bold tabular-nums transition-colors duration-[var(--duration-fast)]",
+                          isSelected
+                            ? "border-[color:var(--brand-gold)] bg-[color:var(--brand-gold)] text-black"
+                            : slot.isAvailable
+                              ? "border-[color:var(--border-default)] text-white hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)]"
+                              : "cursor-not-allowed border-[color:var(--border-subtle)] text-[color:var(--text-subtle)] line-through",
+                        )}
+                      >
+                        {slot.time}
+                      </button>
+                    );
+                  })}
+                </div>
+                {availabilitySlots.some((slot) => !slot.isAvailable) ? (
+                  <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-subtle)]">
+                    Los horarios tachados ya pasaron o no están disponibles
+                  </p>
+                ) : null}
+              </>
             )}
           </div>
 

@@ -10,6 +10,7 @@ export type OwnerBarbershopSummary = {
   appointmentCount: number;
   isDemo: boolean;
   isRemovable: boolean;
+  isActive: boolean;
 };
 
 export type OwnerDashboardMetrics = {
@@ -51,12 +52,17 @@ export async function getOwnerDashboardMetrics() {
   const today = getLocalDateInputValue();
   const { data: knownBarbershops } = await listKnownBarbershops();
   const demoSlugs = new Set(demoBarbershops.map((barbershop) => barbershop.slug));
+
+  // Traemos TODAS las barbershops del DB (activas e inactivas) para que el
+  // owner pueda ver y gestionar las soft-deleted.
   const { data: dbBarbershops } = await getSupabaseClient()
     .from("barbershops")
-    .select("slug")
-    .eq("is_active", true);
+    .select("slug, name, is_active");
   const dbBarbershopSlugs = new Set(
     (dbBarbershops ?? []).map((barbershop) => barbershop.slug),
+  );
+  const inactiveDbBarbershops = (dbBarbershops ?? []).filter(
+    (barbershop) => !barbershop.is_active,
   );
 
   const [
@@ -105,10 +111,27 @@ export async function getOwnerDashboardMetrics() {
           isRemovable:
             dbBarbershopSlugs.has(barbershop.slug) &&
             !demoSlugs.has(barbershop.slug),
+          isActive: true,
         };
       }),
     ),
   ]);
+
+  // Sumamos las barberías inactivas como entries con stats vacíos —
+  // el dashboard las renderiza en una sección aparte.
+  const inactiveSummaries: OwnerBarbershopSummary[] = inactiveDbBarbershops.map(
+    (barbershop) => ({
+      name: barbershop.name,
+      slug: barbershop.slug,
+      barberCount: 0,
+      appointmentCount: 0,
+      isDemo: false,
+      isRemovable: true,
+      isActive: false,
+    }),
+  );
+
+  const allBarbershops = [...barbershopSummaries, ...inactiveSummaries];
 
   const fallbackTotalBarbers = demoBarbershops.reduce(
     (total, barbershop) =>
@@ -126,7 +149,7 @@ export async function getOwnerDashboardMetrics() {
       totalAppointmentsCount: totalAppointmentsResult.count ?? 0,
       todayAppointmentsCount: todayAppointmentsResult.count ?? 0,
       activeServicesCount: activeServicesResult.count ?? 0,
-      barbershops: barbershopSummaries,
+      barbershops: allBarbershops,
     } satisfies OwnerDashboardMetrics,
     error:
       totalBarbersResult.error ??

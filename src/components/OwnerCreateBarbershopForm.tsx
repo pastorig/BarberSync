@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { ArrowLeft, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { getCurrentSession } from "@/lib/auth";
+import { cn } from "@/lib/cn";
+import {
+  Button,
+  Field,
+  Input,
+  Logo,
+  Select,
+  Textarea,
+} from "@/components/ui";
 
 type ServiceInput = {
   id: string;
@@ -29,6 +39,9 @@ function buildSlug(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+const INTERVAL_OPTIONS = [15, 20, 30, 45, 60];
+const PASSWORD_MIN_LENGTH = 8;
+
 export function OwnerCreateBarbershopForm() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -36,7 +49,19 @@ export function OwnerCreateBarbershopForm() {
   const [description, setDescription] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [instagram, setInstagram] = useState("");
+
+  // Horarios de la barbería (defaults sensatos para una barbería real).
+  const [workingHoursStart, setWorkingHoursStart] = useState("09:00");
+  const [workingHoursEnd, setWorkingHoursEnd] = useState("20:00");
+  const [slotIntervalMinutes, setSlotIntervalMinutes] = useState("30");
+
+  // Acceso admin.
   const [adminEmail, setAdminEmail] = useState("");
+  const [generateAutoPassword, setGenerateAutoPassword] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminPasswordConfirm, setAdminPasswordConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
   const [firstBarberName, setFirstBarberName] = useState("");
   const [services, setServices] = useState<ServiceInput[]>([
     createEmptyService("service-1"),
@@ -46,6 +71,7 @@ export function OwnerCreateBarbershopForm() {
   const [createdSlug, setCreatedSlug] = useState("");
   const [createdAdminEmail, setCreatedAdminEmail] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [chosenPasswordReminder, setChosenPasswordReminder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function handleAddService() {
@@ -78,9 +104,39 @@ export function OwnerCreateBarbershopForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!name.trim() || !slug.trim() || !adminEmail.trim() || !firstBarberName.trim()) {
-      setErrorMessage("Completa nombre, slug, email admin y primer barbero.");
+    if (
+      !name.trim() ||
+      !slug.trim() ||
+      !adminEmail.trim() ||
+      !firstBarberName.trim()
+    ) {
+      setErrorMessage("Completá nombre, slug, email admin y primer barbero.");
       return;
+    }
+
+    if (workingHoursStart >= workingHoursEnd) {
+      setErrorMessage("El horario de cierre debe ser mayor al de apertura.");
+      return;
+    }
+
+    // Validación de password si NO se generó automática.
+    if (!generateAutoPassword) {
+      if (!adminPassword) {
+        setErrorMessage(
+          "Definí una contraseña para el admin (o marcá «Generar automática»).",
+        );
+        return;
+      }
+      if (adminPassword.length < PASSWORD_MIN_LENGTH) {
+        setErrorMessage(
+          `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`,
+        );
+        return;
+      }
+      if (adminPassword !== adminPasswordConfirm) {
+        setErrorMessage("Las contraseñas no coinciden.");
+        return;
+      }
     }
 
     const invalidService = services.find(
@@ -91,7 +147,7 @@ export function OwnerCreateBarbershopForm() {
     );
 
     if (invalidService) {
-      setErrorMessage("Completa todos los servicios iniciales.");
+      setErrorMessage("Completá todos los servicios iniciales.");
       return;
     }
 
@@ -100,6 +156,7 @@ export function OwnerCreateBarbershopForm() {
     setCreatedSlug("");
     setCreatedAdminEmail("");
     setTemporaryPassword("");
+    setChosenPasswordReminder(false);
     setIsSubmitting(true);
 
     try {
@@ -107,7 +164,7 @@ export function OwnerCreateBarbershopForm() {
       const accessToken = data.session?.access_token;
 
       if (!accessToken) {
-        setErrorMessage("La sesion no es valida. Ingresa nuevamente.");
+        setErrorMessage("La sesión no es válida. Ingresá nuevamente.");
         router.replace("/login");
         return;
       }
@@ -125,7 +182,11 @@ export function OwnerCreateBarbershopForm() {
           whatsapp: whatsapp.trim(),
           instagram: instagram.trim(),
           adminEmail: adminEmail.trim(),
+          adminPassword: generateAutoPassword ? undefined : adminPassword,
           firstBarberName: firstBarberName.trim(),
+          workingHoursStart,
+          workingHoursEnd,
+          slotIntervalMinutes: Number(slotIntervalMinutes),
           initialServices: services.map((service) => ({
             name: service.name.trim(),
             price: Number(service.price),
@@ -143,24 +204,29 @@ export function OwnerCreateBarbershopForm() {
       };
 
       if (!response.ok) {
-        setErrorMessage(result.error ?? "No pudimos crear la barberia.");
+        setErrorMessage(result.error ?? "No pudimos crear la barbería.");
         return;
       }
 
-      setSuccessMessage(result.message ?? "Barberia creada correctamente.");
+      setSuccessMessage(result.message ?? "Barbería creada correctamente.");
       setCreatedSlug(result.slug ?? "");
       setCreatedAdminEmail(result.adminEmail ?? "");
       setTemporaryPassword(result.temporaryPassword ?? "");
+      setChosenPasswordReminder(!generateAutoPassword);
+
+      // Reset
       setName("");
       setSlug("");
       setDescription("");
       setWhatsapp("");
       setInstagram("");
       setAdminEmail("");
+      setAdminPassword("");
+      setAdminPasswordConfirm("");
       setFirstBarberName("");
       setServices([createEmptyService("service-1")]);
     } catch {
-      setErrorMessage("No pudimos crear la barberia.");
+      setErrorMessage("No pudimos crear la barbería.");
     } finally {
       setIsSubmitting(false);
     }
@@ -168,361 +234,522 @@ export function OwnerCreateBarbershopForm() {
 
   return (
     <main className="min-h-screen bg-black text-white">
-      <section className="mx-auto w-full max-w-4xl px-3 py-4 sm:px-6 sm:py-8 lg:px-12 lg:py-12">
-        <div className="rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-4 shadow-2xl shadow-black/25 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase text-[color:var(--brand-gold)] sm:text-sm">
-                BarberSync Owner
-              </p>
-              <h1 className="mt-2 text-3xl font-black text-white sm:text-5xl">
-                Crear barberia
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--text-secondary)] sm:text-base sm:leading-7">
-                Alta privada de barberias con su admin, primer barbero y
-                servicios iniciales.
-              </p>
-            </div>
-            <Link
-              href="/owner"
-              className="inline-flex min-h-10 items-center justify-center rounded-md border border-[color:var(--border-default)] px-4 py-2 text-sm font-bold text-white transition hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)]"
-            >
-              Volver al owner
-            </Link>
-          </div>
-        </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="mt-4 grid gap-4 lg:grid-cols-[1.05fr_0.95fr] lg:items-start"
+      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-5 sm:px-8 sm:py-6 lg:px-12">
+        <Link
+          href="/owner"
+          className="inline-flex min-w-0 items-center gap-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-colors duration-[var(--duration-fast)] hover:text-[color:var(--brand-gold)] sm:tracking-[0.2em]"
         >
-          <section className="rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-4 shadow-xl shadow-black/20 sm:p-5">
-            <p className="text-xs font-bold uppercase text-[color:var(--brand-gold)]">
-              Datos de la barberia
-            </p>
-            <div className="mt-4 grid gap-3">
-              <div>
-                <label
-                  htmlFor="barbershop-name"
-                  className="text-[11px] font-bold uppercase text-[color:var(--text-muted)]"
-                >
-                  Nombre
-                </label>
-                <input
-                  id="barbershop-name"
-                  value={name}
+          <ArrowLeft className="size-3.5 shrink-0" />
+          <span className="truncate">Owner</span>
+        </Link>
+        <Logo variant="mark" size="sm" className="shrink-0" />
+      </nav>
+
+      <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
+        <header className="mb-10 animate-fade-up">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--brand-gold)] sm:tracking-[0.32em]">
+            BarberSync Owner
+          </p>
+          <h1 className="mt-4 text-3xl font-black uppercase tracking-tight text-balance text-white sm:text-4xl lg:text-5xl">
+            Nueva barbería
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--text-secondary)] sm:text-base">
+            Alta privada con su admin, primer barbero y servicios iniciales.
+            Después podés ajustar horarios y servicios desde el panel.
+          </p>
+        </header>
+
+        <form onSubmit={handleSubmit} className="grid gap-10">
+          {/* Datos de la barbería */}
+          <FormSection
+            eyebrow="Datos de la barbería"
+            description="Identidad pública en BarberSync."
+          >
+            <Field label="Nombre" htmlFor="barbershop-name" required>
+              <Input
+                id="barbershop-name"
+                value={name}
+                disabled={isSubmitting}
+                onChange={(event) => {
+                  const nextName = event.target.value;
+                  setName(nextName);
+                  if (!slug.trim()) {
+                    setSlug(buildSlug(nextName));
+                  }
+                  setErrorMessage("");
+                }}
+                placeholder="Gino Barber"
+                required
+              />
+            </Field>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field
+                label="Slug"
+                htmlFor="barbershop-slug"
+                hint="Aparece en la URL: barbersync.app/[slug]"
+                required
+              >
+                <Input
+                  id="barbershop-slug"
+                  value={slug}
                   disabled={isSubmitting}
                   onChange={(event) => {
-                    const nextName = event.target.value;
-                    setName(nextName);
-                    if (!slug.trim()) {
-                      setSlug(buildSlug(nextName));
-                    }
+                    setSlug(buildSlug(event.target.value));
                     setErrorMessage("");
                   }}
-                  className="mt-1 min-h-11 w-full rounded-md border border-[color:var(--border-default)] bg-black px-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                  placeholder="Gino Barber"
+                  placeholder="gino-barber"
                   required
                 />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="barbershop-slug"
-                    className="text-[11px] font-bold uppercase text-[color:var(--text-muted)]"
-                  >
-                    Slug
-                  </label>
-                  <input
-                    id="barbershop-slug"
-                    value={slug}
-                    disabled={isSubmitting}
-                    onChange={(event) => {
-                      setSlug(buildSlug(event.target.value));
-                      setErrorMessage("");
-                    }}
-                    className="mt-1 min-h-11 w-full rounded-md border border-[color:var(--border-default)] bg-black px-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                    placeholder="gino-barber"
-                    required
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="admin-email"
-                    className="text-[11px] font-bold uppercase text-[color:var(--text-muted)]"
-                  >
-                    Email admin
-                  </label>
-                  <input
-                    id="admin-email"
-                    type="email"
-                    value={adminEmail}
-                    disabled={isSubmitting}
-                    onChange={(event) => {
-                      setAdminEmail(event.target.value);
-                      setErrorMessage("");
-                    }}
-                    className="mt-1 min-h-11 w-full rounded-md border border-[color:var(--border-default)] bg-black px-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                    placeholder="admin@barberia.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="barbershop-description"
-                  className="text-[11px] font-bold uppercase text-[color:var(--text-muted)]"
-                >
-                  Descripcion
-                </label>
-                <textarea
-                  id="barbershop-description"
-                  value={description}
+              </Field>
+              <Field label="WhatsApp" htmlFor="barbershop-whatsapp" optional>
+                <Input
+                  id="barbershop-whatsapp"
+                  value={whatsapp}
                   disabled={isSubmitting}
                   onChange={(event) => {
-                    setDescription(event.target.value);
+                    setWhatsapp(event.target.value);
                     setErrorMessage("");
                   }}
-                  rows={3}
-                  className="mt-1 w-full rounded-md border border-[color:var(--border-default)] bg-black px-3 py-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                  placeholder="Descripcion breve de la barberia"
+                  placeholder="+54 9 11 5555-5555"
                 />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="barbershop-whatsapp"
-                    className="text-[11px] font-bold uppercase text-[color:var(--text-muted)]"
-                  >
-                    WhatsApp
-                  </label>
-                  <input
-                    id="barbershop-whatsapp"
-                    value={whatsapp}
-                    disabled={isSubmitting}
-                    onChange={(event) => {
-                      setWhatsapp(event.target.value);
-                      setErrorMessage("");
-                    }}
-                    className="mt-1 min-h-11 w-full rounded-md border border-[color:var(--border-default)] bg-black px-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                    placeholder="+54..."
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="barbershop-instagram"
-                    className="text-[11px] font-bold uppercase text-[color:var(--text-muted)]"
-                  >
-                    Instagram
-                  </label>
-                  <input
-                    id="barbershop-instagram"
-                    value={instagram}
-                    disabled={isSubmitting}
-                    onChange={(event) => {
-                      setInstagram(event.target.value);
-                      setErrorMessage("");
-                    }}
-                    className="mt-1 min-h-11 w-full rounded-md border border-[color:var(--border-default)] bg-black px-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                    placeholder="https://instagram.com/..."
-                  />
-                </div>
-              </div>
+              </Field>
             </div>
-          </section>
 
-          <section className="grid gap-4">
-            <article className="rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-4 shadow-xl shadow-black/20 sm:p-5">
-              <p className="text-xs font-bold uppercase text-[color:var(--brand-gold)]">
-                Primer barbero
-              </p>
-              <div className="mt-4">
-                <label
-                  htmlFor="first-barber-name"
-                  className="text-[11px] font-bold uppercase text-[color:var(--text-muted)]"
-                >
-                  Nombre
-                </label>
-                <input
-                  id="first-barber-name"
-                  value={firstBarberName}
+            <Field label="Descripción" htmlFor="barbershop-description" optional>
+              <Textarea
+                id="barbershop-description"
+                value={description}
+                disabled={isSubmitting}
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                  setErrorMessage("");
+                }}
+                rows={3}
+                placeholder="Descripción breve de la barbería"
+              />
+            </Field>
+
+            <Field label="Instagram" htmlFor="barbershop-instagram" optional>
+              <Input
+                id="barbershop-instagram"
+                value={instagram}
+                disabled={isSubmitting}
+                onChange={(event) => {
+                  setInstagram(event.target.value);
+                  setErrorMessage("");
+                }}
+                placeholder="https://instagram.com/..."
+              />
+            </Field>
+          </FormSection>
+
+          {/* Horarios */}
+          <FormSection
+            eyebrow="Horarios de atención"
+            description="Rango horario en el que la barbería recibe turnos y duración base de cada slot. Esto inicializa el horario semanal del primer barbero (Lun-Sáb). Ajustable después por día desde el admin."
+          >
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field label="Apertura" htmlFor="working-hours-start" required>
+                <Input
+                  id="working-hours-start"
+                  type="time"
+                  value={workingHoursStart}
                   disabled={isSubmitting}
                   onChange={(event) => {
-                    setFirstBarberName(event.target.value);
+                    setWorkingHoursStart(event.target.value);
                     setErrorMessage("");
                   }}
-                  className="mt-1 min-h-11 w-full rounded-md border border-[color:var(--border-default)] bg-black px-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                  placeholder="Gino"
                   required
                 />
-              </div>
-            </article>
-
-            <article className="rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-4 shadow-xl shadow-black/20 sm:p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase text-[color:var(--brand-gold)]">
-                    Servicios iniciales
-                  </p>
-                  <p className="mt-1 text-sm text-[color:var(--text-muted)]">
-                    Precio y duracion del primer set.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddService}
-                  className="inline-flex min-h-9 items-center justify-center rounded-md border border-[color:var(--border-default)] px-3 py-2 text-[11px] font-bold uppercase text-white transition hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)]"
+              </Field>
+              <Field label="Cierre" htmlFor="working-hours-end" required>
+                <Input
+                  id="working-hours-end"
+                  type="time"
+                  value={workingHoursEnd}
+                  disabled={isSubmitting}
+                  onChange={(event) => {
+                    setWorkingHoursEnd(event.target.value);
+                    setErrorMessage("");
+                  }}
+                  required
+                />
+              </Field>
+              <Field
+                label="Intervalo de slot"
+                htmlFor="slot-interval"
+                hint="Cada cuánto se ofrece un horario"
+                required
+              >
+                <Select
+                  id="slot-interval"
+                  value={slotIntervalMinutes}
+                  disabled={isSubmitting}
+                  onChange={(event) => {
+                    setSlotIntervalMinutes(event.target.value);
+                    setErrorMessage("");
+                  }}
+                  required
                 >
-                  Agregar
-                </button>
-              </div>
+                  {INTERVAL_OPTIONS.map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      {minutes} min
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          </FormSection>
 
-              <div className="mt-4 grid gap-3">
-                {services.map((service, index) => (
-                  <div
-                    key={service.id}
-                    className="rounded-md border border-[color:var(--border-default)] bg-black p-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[11px] font-bold uppercase text-[color:var(--text-subtle)]">
-                        Servicio {index + 1}
-                      </p>
+          {/* Acceso admin */}
+          <FormSection
+            eyebrow="Acceso admin"
+            description="Credenciales con las que ingresará el dueño/recepcionista al panel admin."
+          >
+            <Field label="Email admin" htmlFor="admin-email" required>
+              <Input
+                id="admin-email"
+                type="email"
+                value={adminEmail}
+                disabled={isSubmitting}
+                onChange={(event) => {
+                  setAdminEmail(event.target.value);
+                  setErrorMessage("");
+                }}
+                placeholder="admin@barberia.com"
+                autoComplete="email"
+                inputMode="email"
+                required
+              />
+            </Field>
+
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={generateAutoPassword}
+                disabled={isSubmitting}
+                onChange={(event) => {
+                  setGenerateAutoPassword(event.target.checked);
+                  if (event.target.checked) {
+                    setAdminPassword("");
+                    setAdminPasswordConfirm("");
+                  }
+                  setErrorMessage("");
+                }}
+                className="size-4 accent-[color:var(--brand-gold)]"
+              />
+              <span className="text-sm text-[color:var(--text-secondary)]">
+                Generar contraseña automática (se mostrará una vez al crear)
+              </span>
+            </label>
+
+            {!generateAutoPassword ? (
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  label="Contraseña"
+                  htmlFor="admin-password"
+                  required
+                  hint={`Mínimo ${PASSWORD_MIN_LENGTH} caracteres`}
+                >
+                  <div className="relative">
+                    <Input
+                      id="admin-password"
+                      type={showPassword ? "text" : "password"}
+                      value={adminPassword}
+                      disabled={isSubmitting}
+                      onChange={(event) => {
+                        setAdminPassword(event.target.value);
+                        setErrorMessage("");
+                      }}
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                      minLength={PASSWORD_MIN_LENGTH}
+                      required
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={
+                        showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                      }
+                      className="absolute inset-y-0 right-0 flex items-center px-3 text-[color:var(--text-muted)] transition-colors hover:text-[color:var(--brand-gold)]"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="size-4" />
+                      ) : (
+                        <Eye className="size-4" />
+                      )}
+                    </button>
+                  </div>
+                </Field>
+                <Field
+                  label="Confirmar contraseña"
+                  htmlFor="admin-password-confirm"
+                  required
+                  error={
+                    adminPasswordConfirm &&
+                    adminPassword !== adminPasswordConfirm
+                      ? "No coincide con la contraseña"
+                      : undefined
+                  }
+                >
+                  <Input
+                    id="admin-password-confirm"
+                    type={showPassword ? "text" : "password"}
+                    value={adminPasswordConfirm}
+                    disabled={isSubmitting}
+                    onChange={(event) => {
+                      setAdminPasswordConfirm(event.target.value);
+                      setErrorMessage("");
+                    }}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    minLength={PASSWORD_MIN_LENGTH}
+                    required
+                  />
+                </Field>
+              </div>
+            ) : null}
+          </FormSection>
+
+          {/* Primer barbero */}
+          <FormSection
+            eyebrow="Primer barbero"
+            description="Se crea automáticamente con los horarios definidos arriba (Lun-Sáb working, Dom no). El admin puede editarlo después."
+          >
+            <Field label="Nombre" htmlFor="first-barber-name" required>
+              <Input
+                id="first-barber-name"
+                value={firstBarberName}
+                disabled={isSubmitting}
+                onChange={(event) => {
+                  setFirstBarberName(event.target.value);
+                  setErrorMessage("");
+                }}
+                placeholder="Gino"
+                required
+              />
+            </Field>
+          </FormSection>
+
+          {/* Servicios iniciales */}
+          <FormSection
+            eyebrow="Servicios iniciales"
+            description="Primer set de servicios del barbero. Se pueden editar y sumar más después."
+            action={
+              <button
+                type="button"
+                onClick={handleAddService}
+                disabled={isSubmitting}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--border-default)] px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)] disabled:opacity-40"
+              >
+                <Plus className="size-3.5" />
+                Agregar
+              </button>
+            }
+          >
+            <div className="grid gap-3">
+              {services.map((service, index) => (
+                <div
+                  key={service.id}
+                  className="grid gap-3 rounded-[var(--radius-sm)] border border-[color:var(--border-subtle)] p-3 sm:p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                      Servicio {index + 1}
+                    </p>
+                    {services.length > 1 ? (
                       <button
                         type="button"
-                        disabled={services.length === 1}
                         onClick={() => handleRemoveService(service.id)}
-                        className="text-[11px] font-bold uppercase text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-subtle)] transition-colors hover:text-[color:var(--danger)]"
                       >
+                        <Trash2 className="size-3" />
                         Quitar
                       </button>
-                    </div>
-                    <div className="mt-3 grid gap-2">
-                      <input
-                        value={service.name}
-                        disabled={isSubmitting}
-                        onChange={(event) =>
-                          handleServiceChange(
-                            service.id,
-                            "name",
-                            event.target.value,
-                          )
-                        }
-                        className="min-h-10 rounded-md border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                        placeholder="Corte"
-                        required
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="number"
-                          min="1"
-                          value={service.price}
-                          disabled={isSubmitting}
-                          onChange={(event) =>
-                            handleServiceChange(
-                              service.id,
-                              "price",
-                              event.target.value,
-                            )
-                          }
-                          className="min-h-10 rounded-md border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                          placeholder="8500"
-                          required
-                        />
-                        <input
-                          type="number"
-                          min="1"
-                          value={service.durationMinutes}
-                          disabled={isSubmitting}
-                          onChange={(event) =>
-                            handleServiceChange(
-                              service.id,
-                              "durationMinutes",
-                              event.target.value,
-                            )
-                          }
-                          className="min-h-10 rounded-md border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-3 text-sm text-white outline-none transition focus:border-[color:var(--brand-gold)]"
-                          placeholder="30"
-                          required
-                        />
-                      </div>
-                    </div>
+                    ) : null}
                   </div>
-                ))}
-              </div>
-            </article>
-
-            {errorMessage ? (
-              <p
-                role="alert"
-                className="rounded-lg border border-[color:var(--danger)]/40 bg-[color:var(--danger-soft)] px-4 py-3 text-sm font-semibold text-[color:var(--danger)]"
-              >
-                {errorMessage}
-              </p>
-            ) : null}
-
-            {successMessage ? (
-              <div className="rounded-lg border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] px-4 py-3 text-sm font-semibold text-[color:var(--success)]">
-                <p>{successMessage}</p>
-                {createdAdminEmail ? (
-                  <p className="mt-2 text-xs font-medium text-[color:var(--success)]">
-                    Admin asignado: {createdAdminEmail}
-                  </p>
-                ) : null}
-                {temporaryPassword ? (
-                  <div className="mt-3 rounded-md border border-[color:var(--success)]/40 bg-black/50 px-3 py-3 text-xs text-[color:var(--success)]">
-                    <p className="font-bold uppercase text-[color:var(--success)]">
-                      Usuario creado automaticamente
-                    </p>
-                    <p className="mt-2">
-                      Contrasena temporal:{" "}
-                      <span className="font-mono font-black">
-                        {temporaryPassword}
-                      </span>
-                    </p>
-                    <p className="mt-2 text-[11px] leading-5 text-[color:var(--success)]/90">
-                      Comparti esta clave temporal con la barberia o reseteala
-                      luego desde el panel owner si hace falta.
-                    </p>
+                  <div className="grid gap-3 sm:grid-cols-[1fr_120px_120px]">
+                    <Input
+                      value={service.name}
+                      disabled={isSubmitting}
+                      onChange={(event) =>
+                        handleServiceChange(
+                          service.id,
+                          "name",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="Corte"
+                      aria-label="Nombre del servicio"
+                      required
+                    />
+                    <Input
+                      type="number"
+                      min="1"
+                      value={service.price}
+                      disabled={isSubmitting}
+                      onChange={(event) =>
+                        handleServiceChange(
+                          service.id,
+                          "price",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="Precio"
+                      aria-label="Precio del servicio"
+                      required
+                    />
+                    <Input
+                      type="number"
+                      min="1"
+                      value={service.durationMinutes}
+                      disabled={isSubmitting}
+                      onChange={(event) =>
+                        handleServiceChange(
+                          service.id,
+                          "durationMinutes",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="Min"
+                      aria-label="Duración del servicio en minutos"
+                      required
+                    />
                   </div>
-                ) : null}
-                {createdSlug ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Link
-                      href={`/${createdSlug}`}
-                      className="inline-flex min-h-9 items-center justify-center rounded-md border border-[color:var(--success)]/40 px-3 py-2 text-[11px] font-bold uppercase text-[color:var(--success)]"
-                    >
-                      Ver pagina publica
-                    </Link>
-                    <Link
-                      href={`/${createdSlug}/admin`}
-                      className="inline-flex min-h-9 items-center justify-center rounded-md border border-[color:var(--success)]/40 px-3 py-2 text-[11px] font-bold uppercase text-[color:var(--success)]"
-                    >
-                      Abrir admin como owner
-                    </Link>
-                    <Link
-                      href={`/login?next=/${createdSlug}/admin`}
-                      className="inline-flex min-h-9 items-center justify-center rounded-md border border-[color:var(--success)]/40 px-3 py-2 text-[11px] font-bold uppercase text-[color:var(--success)]"
-                    >
-                      Login admin
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                </div>
+              ))}
+            </div>
+          </FormSection>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex min-h-12 items-center justify-center rounded-md bg-[color:var(--brand-gold)] px-6 py-3 text-sm font-bold uppercase text-black transition hover:bg-[color:var(--brand-gold-hi)] disabled:cursor-not-allowed disabled:opacity-60"
+          {/* Mensajes y submit */}
+          {errorMessage ? (
+            <div
+              role="alert"
+              className="border-l-2 border-[color:var(--danger)] pl-4 text-sm font-semibold text-[color:var(--danger)]"
             >
-              {isSubmitting ? "Creando..." : "Crear barberia"}
-            </button>
-          </section>
+              {errorMessage}
+            </div>
+          ) : null}
+
+          {successMessage ? (
+            <div className="rounded-[var(--radius-sm)] border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--success)]">
+                Listo
+              </p>
+              <p className="mt-2 text-base font-bold text-white">
+                {successMessage}
+              </p>
+              {createdAdminEmail ? (
+                <p className="mt-3 text-sm text-[color:var(--text-secondary)]">
+                  Admin asignado:{" "}
+                  <span className="font-mono font-semibold text-white">
+                    {createdAdminEmail}
+                  </span>
+                </p>
+              ) : null}
+
+              {temporaryPassword ? (
+                <div className="mt-4 rounded-[var(--radius-sm)] border border-[color:var(--brand-gold)]/40 bg-black/50 p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--brand-gold)]">
+                    Contraseña generada automáticamente
+                  </p>
+                  <p className="mt-2 font-mono text-lg font-black tabular-nums text-[color:var(--brand-gold)]">
+                    {temporaryPassword}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-[color:var(--text-muted)]">
+                    Compartila con la barbería. Solo se muestra esta vez —
+                    si la perdés, podés resetearla desde el panel owner.
+                  </p>
+                </div>
+              ) : chosenPasswordReminder ? (
+                <p className="mt-4 text-xs text-[color:var(--text-muted)]">
+                  Compartí la contraseña que elegiste con la barbería.
+                </p>
+              ) : null}
+
+              {createdSlug ? (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Button
+                    as="link"
+                    href={`/${createdSlug}`}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    Página pública
+                  </Button>
+                  <Button
+                    as="link"
+                    href={`/${createdSlug}/admin`}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    Admin como owner
+                  </Button>
+                  <Button
+                    as="link"
+                    href={`/login?next=/${createdSlug}/admin`}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    Login admin
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <Button
+            type="submit"
+            size="lg"
+            loading={isSubmitting}
+            className="w-full sm:w-auto sm:self-end"
+          >
+            {isSubmitting ? "Creando…" : "Crear barbería"}
+          </Button>
         </form>
-      </section>
+      </div>
     </main>
+  );
+}
+
+function FormSection({
+  eyebrow,
+  description,
+  action,
+  children,
+  className,
+}: {
+  eyebrow: string;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn(
+        "border-t border-[color:var(--border-subtle)] pt-8",
+        className,
+      )}
+    >
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--brand-gold)]">
+            {eyebrow}
+          </p>
+          {description ? (
+            <p className="mt-2 max-w-2xl text-sm text-[color:var(--text-muted)]">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+      <div className="grid gap-5">{children}</div>
+    </section>
   );
 }
