@@ -445,72 +445,78 @@ export function OwnerCreateBarbershopForm() {
             </label>
 
             {!generateAutoPassword ? (
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field
-                  label="Contraseña"
-                  htmlFor="admin-password"
-                  required
-                  hint={`Mínimo ${PASSWORD_MIN_LENGTH} caracteres`}
-                >
-                  <div className="relative">
+              <div className="grid gap-5">
+                <div className="grid items-start gap-5 sm:grid-cols-2">
+                  <Field
+                    label="Contraseña"
+                    htmlFor="admin-password"
+                    required
+                  >
+                    <div className="relative">
+                      <Input
+                        id="admin-password"
+                        type={showPassword ? "text" : "password"}
+                        value={adminPassword}
+                        disabled={isSubmitting}
+                        onChange={(event) => {
+                          setAdminPassword(event.target.value);
+                          setErrorMessage("");
+                        }}
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                        minLength={PASSWORD_MIN_LENGTH}
+                        required
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={
+                          showPassword
+                            ? "Ocultar contraseña"
+                            : "Mostrar contraseña"
+                        }
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-[color:var(--text-muted)] transition-colors hover:text-[color:var(--brand-gold)]"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="size-4" />
+                        ) : (
+                          <Eye className="size-4" />
+                        )}
+                      </button>
+                    </div>
+                  </Field>
+                  <Field
+                    label="Confirmar contraseña"
+                    htmlFor="admin-password-confirm"
+                    required
+                    error={
+                      adminPasswordConfirm &&
+                      adminPassword !== adminPasswordConfirm
+                        ? "No coincide con la contraseña"
+                        : undefined
+                    }
+                  >
                     <Input
-                      id="admin-password"
+                      id="admin-password-confirm"
                       type={showPassword ? "text" : "password"}
-                      value={adminPassword}
+                      value={adminPasswordConfirm}
                       disabled={isSubmitting}
                       onChange={(event) => {
-                        setAdminPassword(event.target.value);
+                        setAdminPasswordConfirm(event.target.value);
                         setErrorMessage("");
                       }}
                       placeholder="••••••••"
                       autoComplete="new-password"
                       minLength={PASSWORD_MIN_LENGTH}
                       required
-                      className="pr-10"
                     />
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => setShowPassword((v) => !v)}
-                      aria-label={
-                        showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-                      }
-                      className="absolute inset-y-0 right-0 flex items-center px-3 text-[color:var(--text-muted)] transition-colors hover:text-[color:var(--brand-gold)]"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="size-4" />
-                      ) : (
-                        <Eye className="size-4" />
-                      )}
-                    </button>
-                  </div>
-                </Field>
-                <Field
-                  label="Confirmar contraseña"
-                  htmlFor="admin-password-confirm"
-                  required
-                  error={
-                    adminPasswordConfirm &&
-                    adminPassword !== adminPasswordConfirm
-                      ? "No coincide con la contraseña"
-                      : undefined
-                  }
-                >
-                  <Input
-                    id="admin-password-confirm"
-                    type={showPassword ? "text" : "password"}
-                    value={adminPasswordConfirm}
-                    disabled={isSubmitting}
-                    onChange={(event) => {
-                      setAdminPasswordConfirm(event.target.value);
-                      setErrorMessage("");
-                    }}
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                    minLength={PASSWORD_MIN_LENGTH}
-                    required
-                  />
-                </Field>
+                  </Field>
+                </div>
+                <p className="text-xs text-[color:var(--text-subtle)]">
+                  Mínimo {PASSWORD_MIN_LENGTH} caracteres.
+                </p>
               </div>
             ) : null}
           </FormSection>

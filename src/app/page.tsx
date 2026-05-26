@@ -42,7 +42,7 @@ export default function Home() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--brand-gold)] sm:tracking-[0.32em]">
             Plataforma SaaS · Argentina
           </p>
-          <h1 className="mt-6 max-w-4xl text-[2.25rem] font-black uppercase leading-[0.95] tracking-tight text-balance sm:mt-8 sm:text-6xl lg:text-7xl lg:leading-[0.9] xl:text-[112px]">
+          <h1 className="mt-6 max-w-3xl text-[2rem] font-black uppercase leading-[0.95] tracking-tight text-balance sm:mt-8 sm:text-5xl lg:text-6xl lg:leading-[0.95] xl:text-7xl">
             Turnos online
             <br />
             <span className="text-[color:var(--brand-gold)]">para barberías</span>
