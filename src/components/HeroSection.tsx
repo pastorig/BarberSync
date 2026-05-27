@@ -66,21 +66,21 @@ export function HeroSection({ barbershop }: HeroSectionProps) {
         className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-px bg-[color:var(--border-subtle)]"
       />
 
-      <div className="mx-auto w-full max-w-6xl px-4 pb-16 pt-10 sm:px-8 sm:pb-24 sm:pt-16 lg:px-12 lg:pb-32 lg:pt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 pb-10 pt-8 sm:px-8 sm:pb-14 sm:pt-12 lg:px-12 lg:pb-16 lg:pt-14">
         <div className="animate-fade-up text-center sm:text-left">
           <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-[color:var(--brand-gold)]">
             Reservas online
           </p>
 
-          <h1 className="mt-6 text-[2.5rem] font-black uppercase leading-[0.95] tracking-tight text-balance text-white sm:mt-8 sm:text-6xl lg:text-7xl">
+          <h1 className="mt-4 text-[2.25rem] font-black uppercase leading-[0.95] tracking-tight text-balance text-white sm:mt-5 sm:text-5xl lg:text-6xl">
             {barbershop.name}
           </h1>
 
-          <p className="mx-auto mt-6 max-w-xl text-base leading-7 text-[color:var(--text-secondary)] sm:mx-0 sm:mt-8 sm:text-lg sm:leading-8">
+          <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-[color:var(--text-secondary)] sm:mx-0 sm:mt-5 sm:text-lg sm:leading-8">
             {barbershop.description}
           </p>
 
-          <div className="mt-10 flex flex-col items-stretch gap-3 sm:mt-12 sm:flex-row sm:items-center sm:gap-4">
+          <div className="mt-7 flex flex-col items-stretch gap-3 sm:mt-8 sm:flex-row sm:items-center sm:gap-4">
             <BookingCTA barbershopSlug={barbershop.slug} />
             {whatsappLink ? (
               <a

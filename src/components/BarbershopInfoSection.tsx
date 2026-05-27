@@ -50,17 +50,17 @@ export function BarbershopInfoSection({
 
   return (
     <section className="border-t border-[color:var(--border-subtle)]">
-      <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-8 sm:py-20 lg:px-12">
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-8 sm:py-14 lg:px-12 lg:py-16">
         <header className="text-center sm:text-left">
           <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-[color:var(--brand-gold)]">
             Información
           </p>
-          <h2 className="mt-3 text-3xl font-black uppercase tracking-tight text-white sm:mt-4 sm:text-4xl lg:text-5xl">
+          <h2 className="mt-3 text-2xl font-black uppercase tracking-tight text-white sm:mt-4 sm:text-3xl lg:text-4xl">
             Cómo encontrarnos
           </h2>
         </header>
 
-        <div className="mt-10 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-2 sm:gap-4">
           {/* Horario */}
           <article className="flex items-start gap-4 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] p-5">
             <div

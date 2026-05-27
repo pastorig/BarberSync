@@ -20,17 +20,17 @@ export function ServicesSection({
       id="servicios"
       className="border-t border-[color:var(--border-subtle)] bg-[color:var(--surface-0)]"
     >
-      <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-8 sm:py-20 lg:px-12">
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-8 sm:py-14 lg:px-12 lg:py-16">
         <header className="text-center sm:text-left">
           <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-[color:var(--brand-gold)]">
             Servicios
           </p>
-          <h2 className="mt-3 text-3xl font-black uppercase tracking-tight text-white sm:mt-4 sm:text-4xl lg:text-5xl">
+          <h2 className="mt-3 text-2xl font-black uppercase tracking-tight text-white sm:mt-4 sm:text-3xl lg:text-4xl">
             Elegí tu servicio
           </h2>
         </header>
 
-        <ul className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-2 lg:grid-cols-3">
           {services.map((service) => (
             <li
               key={service.id}
@@ -51,7 +51,7 @@ export function ServicesSection({
           ))}
         </ul>
 
-        <div className="mt-10 flex justify-center sm:justify-start">
+        <div className="mt-8 flex justify-center sm:justify-start">
           <BookingCTA barbershopSlug={barbershopSlug} />
         </div>
       </div>
