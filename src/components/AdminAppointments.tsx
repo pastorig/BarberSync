@@ -566,14 +566,21 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       const gap = nextStart - currentEnd;
 
                       if (gap > 0) {
-                        // Si los dos turnos son del mismo barbero, podemos
-                        // estimar cuántos cortes entrarían en el hueco
-                        // usando la duración mínima de sus servicios activos.
-                        const sameBarber =
-                          appointment.barber_id === next.barber_id;
-                        const duration = sameBarber
-                          ? minDurationByBarber.get(appointment.barber_id)
-                          : undefined;
+                        // Cortes posibles = capacidad del barbero más
+                        // "rápido" entre el turno previo y el siguiente
+                        // (duración mínima de sus servicios activos).
+                        // Si los dos son el mismo barbero, da lo mismo.
+                        const prevMin = minDurationByBarber.get(
+                          appointment.barber_id,
+                        );
+                        const nextMin = minDurationByBarber.get(next.barber_id);
+                        const candidates = [prevMin, nextMin].filter(
+                          (m): m is number => typeof m === "number" && m > 0,
+                        );
+                        const duration =
+                          candidates.length > 0
+                            ? Math.min(...candidates)
+                            : undefined;
                         const possibleCuts =
                           duration && duration > 0
                             ? Math.floor(gap / duration)
