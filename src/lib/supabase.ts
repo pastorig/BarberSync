@@ -241,19 +241,19 @@ type Database = {
       };
       confirm_appointment_by_token: {
         Args: { p_token: string };
-        Returns: Array<{
+        Returns: {
           ok: boolean;
           status: AppointmentStatus | null;
           reason: string;
-        }>;
+        };
       };
       cancel_appointment_by_token: {
         Args: { p_token: string };
-        Returns: Array<{
+        Returns: {
           ok: boolean;
           status: AppointmentStatus | null;
           reason: string;
-        }>;
+        };
       };
     };
     Enums: Record<string, never>;

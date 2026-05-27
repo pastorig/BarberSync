@@ -3,23 +3,24 @@ import { notFound } from "next/navigation";
 import { Logo } from "@/components/ui";
 import { resolveBarbershopBySlug } from "@/lib/barbershops";
 import { getPublicAppointmentByToken } from "@/lib/public-appointment";
-import { AppointmentActionPanel } from "./AppointmentActionPanel";
+import { AppointmentActionPanel } from "../AppointmentActionPanel";
 
-type PublicAppointmentPageProps = {
+type PublicAppointmentResponderPageProps = {
   params: Promise<{
     token: string;
   }>;
 };
 
-// Server component: trae el turno con SSR. La interacción confirmar/cancelar
-// la maneja el componente cliente `AppointmentActionPanel`.
-export default async function PublicAppointmentPage({
+/**
+ * Vista "activa" del turno: el cliente puede Confirmar o Cancelar.
+ * Esta es la URL que va en el WhatsApp del admin → cliente (recordatorio).
+ * Para vista pasiva (solo detalle, sin botones), usar `/r/[token]`.
+ */
+export default async function PublicAppointmentResponderPage({
   params,
-}: PublicAppointmentPageProps) {
+}: PublicAppointmentResponderPageProps) {
   const { token } = await params;
 
-  // Validación mínima del formato: si no parece UUID, 404 directo (evita
-  // bots probando URLs random).
   if (!/^[0-9a-f-]{30,40}$/i.test(token)) {
     notFound();
   }
@@ -30,9 +31,6 @@ export default async function PublicAppointmentPage({
     notFound();
   }
 
-  // El RPC cae al slug si la barbería no está en la tabla `barbershops`
-  // (caso típico de las demos como SV Barber). Resolvemos el nombre real
-  // desde la misma fuente que la landing pública usa.
   const { data: resolvedBarbershop } = await resolveBarbershopBySlug(
     appointment.barbershop_slug,
   );
@@ -59,7 +57,7 @@ export default async function PublicAppointmentPage({
         <AppointmentActionPanel
           token={token}
           initialAppointment={appointmentWithName}
-          showActions={false}
+          showActions
         />
       </div>
     </main>

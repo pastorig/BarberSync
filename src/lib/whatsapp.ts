@@ -8,6 +8,12 @@ type WhatsAppBookingLinkInput = {
   date: string;
   time: string;
   comment?: string;
+  /**
+   * Si se provee, agrega al mensaje el link público de detalle/confirmación
+   * del turno. Esto permite al admin abrir el link desde el mismo WhatsApp
+   * del cliente y confirmar sin entrar al panel.
+   */
+  confirmationToken?: string;
 };
 
 type WhatsAppConfirmationLinkInput = {
@@ -29,16 +35,17 @@ function normalizeWhatsAppPhone(phone: string) {
 }
 
 /**
- * Construye la URL pública del link de confirmación.
- * Usa NEXT_PUBLIC_SITE_URL (seteada en Vercel). En SSR/server fallback al
- * mismo default que metadataBase.
+ * Construye la URL pública para que el cliente RESPONDA (confirme o
+ * cancele) su turno desde un click. Apunta a `/r/[token]/responder`.
+ *
+ * Para la vista pasiva (solo detalle, sin botones) usar directamente
+ * `/r/[token]` desde la pantalla de éxito post-reserva.
  */
-function getConfirmationUrl(token: string) {
+function getResponderUrl(token: string) {
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  // Quitar trailing slash si existe.
   const base = siteUrl.replace(/\/$/, "");
-  return `${base}/r/${token}`;
+  return `${base}/r/${token}/responder`;
 }
 
 export function createWhatsAppBookingLink({
@@ -51,6 +58,7 @@ export function createWhatsAppBookingLink({
   date,
   time,
   comment,
+  confirmationToken,
 }: WhatsAppBookingLinkInput) {
   const normalizedPhone = normalizeWhatsAppPhone(barbershopWhatsapp);
   const messageLines = [
@@ -69,6 +77,14 @@ export function createWhatsAppBookingLink({
 
   if (comment?.trim()) {
     messageLines.push(`Comentario: ${comment.trim()}`);
+  }
+
+  if (confirmationToken) {
+    messageLines.push(
+      "",
+      "Detalle y confirmar:",
+      getResponderUrl(confirmationToken),
+    );
   }
 
   return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(
@@ -98,7 +114,7 @@ export function createWhatsAppConfirmationLink({
     messageLines.push(
       "",
       "Confirmá o cancelá tu turno con un click:",
-      getConfirmationUrl(confirmationToken),
+      getResponderUrl(confirmationToken),
     );
   } else {
     messageLines.push(

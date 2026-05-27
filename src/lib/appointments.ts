@@ -22,9 +22,13 @@ type AppointmentTimeInput = AppointmentAvailabilityInput & {
 };
 
 export async function createPendingAppointment(appointment: AppointmentDraft) {
+  // .select().single() para que el INSERT devuelva la fila creada,
+  // incluyendo el confirmation_token auto-generado por DB.
   return getSupabaseClient()
     .from("appointments")
-    .insert({ ...appointment, status: "pending" });
+    .insert({ ...appointment, status: "pending" })
+    .select("id, confirmation_token")
+    .single();
 }
 
 export async function confirmAppointment(appointmentId: string) {

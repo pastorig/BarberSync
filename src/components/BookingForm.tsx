@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { ArrowUpRight } from "lucide-react";
 import {
   type Barber,
   getActiveBarbers,
@@ -84,6 +85,25 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     [],
   );
   const [isLoadingTimes, setIsLoadingTimes] = useState(false);
+
+  // Resultado del booking exitoso: si está set, mostramos pantalla de éxito
+  // (oculta el form) con detalle del turno + link de confirmación.
+  type BookingResult = {
+    confirmationToken: string;
+    barberName: string;
+    serviceName: string;
+    servicePrice: number;
+    serviceDurationMinutes: number;
+    date: string;
+    time: string;
+    customerName: string;
+    customerPhone: string;
+    comment: string;
+    whatsappLink: string;
+  };
+  const [bookingResult, setBookingResult] = useState<BookingResult | null>(
+    null,
+  );
 
   const selectedBarber = activeBarbers.find(
     (barber) => barber.id === selectedBarberId,
@@ -415,8 +435,10 @@ export function BookingForm({ barbershop }: BookingFormProps) {
       comment: comment.trim(),
     };
 
+    let confirmationToken: string | undefined;
+
     try {
-      const { error } = await createPendingAppointment(appointment);
+      const { data, error } = await createPendingAppointment(appointment);
 
       if (error) {
         // 23505 = unique_violation de Postgres. El índice parcial
@@ -443,6 +465,8 @@ export function BookingForm({ barbershop }: BookingFormProps) {
         );
         return;
       }
+
+      confirmationToken = data?.confirmation_token;
     } catch {
       setFormError(
         "No pudimos guardar la reserva. Revisá los datos e intentá nuevamente.",
@@ -452,6 +476,10 @@ export function BookingForm({ barbershop }: BookingFormProps) {
       setIsSaving(false);
     }
 
+    // Nota: NO incluimos el confirmationToken en este WA inicial. El cliente
+    // está PIDIENDO el turno al admin, no comunicándole un link de gestión.
+    // El link va solo en el WA del admin → cliente (cuando el admin manda
+    // el mensaje desde su panel), que tiene sentido conceptual.
     const whatsappLink = createWhatsAppBookingLink({
       barbershopName: barbershop.name,
       barbershopWhatsapp: barbershop.whatsapp,
@@ -464,6 +492,27 @@ export function BookingForm({ barbershop }: BookingFormProps) {
       comment,
     });
 
+    // Cambiamos la UI a "pantalla de éxito" con el link de confirmación
+    // visible para el cliente.
+    if (confirmationToken) {
+      setBookingResult({
+        confirmationToken,
+        barberName: selectedBarberName,
+        serviceName: selectedService.name,
+        servicePrice: selectedService.price,
+        serviceDurationMinutes: selectedService.durationMinutes,
+        date: selectedDate,
+        time: selectedTime,
+        customerName: appointment.customer_name,
+        customerPhone: appointment.customer_phone,
+        comment,
+        whatsappLink,
+      });
+    }
+
+    // Abrimos WhatsApp automático como hasta ahora — el cliente puede
+    // mandar el mensaje y después volver al browser para usar el link
+    // de confirmación.
     window.open(whatsappLink, "_blank", "noopener,noreferrer");
   }
 
@@ -482,6 +531,18 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     { label: "Cliente", value: clientName || "—" },
     { label: "Teléfono", value: clientPhone || "—" },
   ];
+
+  // Si el booking fue exitoso, mostramos la pantalla de éxito en lugar
+  // del form. El cliente puede confirmar al toque desde acá, sin esperar
+  // que el admin le mande otro WA.
+  if (bookingResult) {
+    return (
+      <BookingSuccess
+        result={bookingResult}
+        barbershop={barbershop}
+      />
+    );
+  }
 
   return (
     <form
@@ -799,4 +860,121 @@ export function BookingForm({ barbershop }: BookingFormProps) {
       </div>
     </form>
   );
+}
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* BookingSuccess: pantalla post-reserva con detalle + link de confirmar  */
+/* ────────────────────────────────────────────────────────────────────── */
+
+type BookingSuccessResult = {
+  confirmationToken: string;
+  barberName: string;
+  serviceName: string;
+  servicePrice: number;
+  serviceDurationMinutes: number;
+  date: string;
+  time: string;
+  customerName: string;
+  customerPhone: string;
+  comment: string;
+  whatsappLink: string;
+};
+
+function BookingSuccess({
+  result,
+  barbershop,
+}: {
+  result: BookingSuccessResult;
+  barbershop: DemoBarbershop;
+}) {
+  const confirmHref = `/r/${result.confirmationToken}`;
+
+  return (
+    <section className="grid gap-12 pb-16 lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-20 lg:pb-0">
+      <div className="animate-fade-up">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-[color:var(--brand-gold)]">
+          Turno reservado
+        </p>
+        <h1 className="mt-6 text-4xl font-black uppercase leading-[0.95] tracking-tight text-balance sm:text-5xl lg:text-6xl">
+          ¡Listo, {firstNameOf(result.customerName)}!
+        </h1>
+        <p className="mt-6 max-w-xl text-sm leading-7 text-[color:var(--text-secondary)] sm:text-base">
+          Tu turno en <span className="text-white font-semibold">{barbershop.name}</span>{" "}
+          quedó <span className="text-[color:var(--brand-gold)] font-semibold">pendiente de confirmación</span>.
+          Guardá el link de abajo: podés ver el detalle o cancelar cuando
+          quieras.
+        </p>
+
+        <div className="mt-10 grid gap-3">
+          <Button
+            as="link"
+            href={confirmHref}
+            size="lg"
+            fullWidth
+            iconRight={<ArrowUpRight className="size-4" />}
+            className="sm:w-auto"
+          >
+            Ver mi turno
+          </Button>
+          <a
+            href={result.whatsappLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-[var(--radius-sm)] border border-[color:var(--border-default)] px-4 text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)] sm:w-auto"
+          >
+            Reabrir WhatsApp con la reserva
+          </a>
+        </div>
+
+        <p className="mt-8 text-[10px] uppercase tracking-[0.2em] text-[color:var(--text-subtle)]">
+          Guardá este link · podés volver acá cuando quieras
+        </p>
+      </div>
+
+      {/* Aside: resumen del turno */}
+      <aside className="lg:sticky lg:top-12">
+        <div
+          className="animate-fade-up border-t border-[color:var(--border-subtle)] pt-8 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 lg:pl-10"
+          style={{ animationDelay: "120ms" }}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
+            Detalle del turno
+          </p>
+          <p className="mt-2 font-mono text-4xl font-black tabular-nums leading-none text-[color:var(--brand-gold)] sm:text-5xl">
+            {formatPrice(result.servicePrice)}
+          </p>
+          <dl className="mt-8 grid gap-4">
+            {[
+              { label: "Servicio", value: result.serviceName },
+              {
+                label: "Duración",
+                value: `${result.serviceDurationMinutes} min`,
+              },
+              { label: "Fecha", value: formatDateForDisplay(result.date) },
+              { label: "Horario", value: result.time },
+              { label: "Barbero", value: result.barberName },
+              { label: "Tu nombre", value: result.customerName },
+              { label: "Tel", value: result.customerPhone },
+            ].map((row) => (
+              <div
+                key={row.label}
+                className="grid grid-cols-[auto_1fr] items-baseline gap-4"
+              >
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                  {row.label}
+                </dt>
+                <dd className="text-right text-sm font-semibold text-white">
+                  {row.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </aside>
+    </section>
+  );
+}
+
+function firstNameOf(fullName: string) {
+  return fullName.trim().split(/\s+/)[0] ?? fullName;
 }

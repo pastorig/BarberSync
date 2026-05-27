@@ -39,9 +39,22 @@ export async function getPublicAppointmentByToken(token: string) {
 
 type ActionResult = {
   ok: boolean;
-  status: string | null;
+  status: PublicAppointmentByToken["status"] | null;
   reason: string;
 };
+
+function parseActionResult(raw: unknown): ActionResult {
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    return {
+      ok: Boolean(obj.ok),
+      status:
+        (obj.status as ActionResult["status"]) ?? null,
+      reason: typeof obj.reason === "string" ? obj.reason : "unknown",
+    };
+  }
+  return { ok: false, status: null, reason: "unknown" };
+}
 
 export async function confirmAppointmentByToken(token: string) {
   const { data, error } = await getSupabaseClient().rpc(
@@ -53,10 +66,7 @@ export async function confirmAppointmentByToken(token: string) {
     return { ok: false, status: null, reason: error.message };
   }
 
-  const row = (data as ActionResult[] | null)?.[0];
-  return (
-    row ?? { ok: false, status: null, reason: "unknown" }
-  );
+  return parseActionResult(data);
 }
 
 export async function cancelAppointmentByToken(token: string) {
@@ -69,8 +79,5 @@ export async function cancelAppointmentByToken(token: string) {
     return { ok: false, status: null, reason: error.message };
   }
 
-  const row = (data as ActionResult[] | null)?.[0];
-  return (
-    row ?? { ok: false, status: null, reason: "unknown" }
-  );
+  return parseActionResult(data);
 }

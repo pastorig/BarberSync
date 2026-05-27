@@ -18,6 +18,12 @@ import {
 type AppointmentActionPanelProps = {
   token: string;
   initialAppointment: PublicAppointmentByToken;
+  /**
+   * Si true, muestra los botones Confirmar / No puedo asistir (modo activo).
+   * Si false, solo muestra el detalle del turno (modo pasivo).
+   * Default: true.
+   */
+  showActions?: boolean;
 };
 
 type ActionState = "idle" | "confirming" | "cancelling";
@@ -25,6 +31,7 @@ type ActionState = "idle" | "confirming" | "cancelling";
 export function AppointmentActionPanel({
   token,
   initialAppointment,
+  showActions = true,
 }: AppointmentActionPanelProps) {
   const [appointment, setAppointment] = useState(initialAppointment);
   const [actionState, setActionState] = useState<ActionState>("idle");
@@ -127,57 +134,72 @@ export function AppointmentActionPanel({
 
       {/* Acciones */}
       <div className="mt-10">
-        {isPending ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Button
-              type="button"
-              size="lg"
-              fullWidth
-              loading={actionState === "confirming"}
-              disabled={actionState !== "idle"}
-              onClick={handleConfirm}
-              iconLeft={<Check className="size-4" />}
-            >
-              Confirmar turno
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="lg"
-              fullWidth
-              loading={actionState === "cancelling"}
-              disabled={actionState !== "idle"}
-              onClick={handleCancel}
-              iconLeft={<X className="size-4" />}
-            >
-              No puedo asistir
-            </Button>
-          </div>
-        ) : isConfirmed ? (
-          <div className="space-y-4">
+        {showActions ? (
+          // ── Modo activo: cliente decide (viene del WA del admin) ──
+          isPending ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button
+                type="button"
+                size="lg"
+                fullWidth
+                loading={actionState === "confirming"}
+                disabled={actionState !== "idle"}
+                onClick={handleConfirm}
+                iconLeft={<Check className="size-4" />}
+              >
+                Confirmar turno
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="lg"
+                fullWidth
+                loading={actionState === "cancelling"}
+                disabled={actionState !== "idle"}
+                onClick={handleCancel}
+                iconLeft={<X className="size-4" />}
+              >
+                No puedo asistir
+              </Button>
+            </div>
+          ) : isConfirmed ? (
+            <div className="space-y-4">
+              <p className="text-sm text-[color:var(--text-secondary)]">
+                Gracias por confirmar. Te esperamos en{" "}
+                {appointment.barbershop_name}.
+              </p>
+              <Button
+                type="button"
+                variant="danger"
+                size="md"
+                loading={actionState === "cancelling"}
+                disabled={actionState !== "idle"}
+                onClick={handleCancel}
+                iconLeft={<X className="size-3.5" />}
+              >
+                Cancelar este turno
+              </Button>
+            </div>
+          ) : isCancelled ? (
             <p className="text-sm text-[color:var(--text-secondary)]">
-              Gracias por confirmar. Te esperamos en {appointment.barbershop_name}.
+              Este turno está cancelado. Si querés reservar otro, podés
+              hacerlo desde la página de {appointment.barbershop_name}.
             </p>
-            <Button
-              type="button"
-              variant="danger"
-              size="md"
-              loading={actionState === "cancelling"}
-              disabled={actionState !== "idle"}
-              onClick={handleCancel}
-              iconLeft={<X className="size-3.5" />}
-            >
-              Cancelar este turno
-            </Button>
-          </div>
-        ) : isCancelled ? (
-          <p className="text-sm text-[color:var(--text-secondary)]">
-            Este turno está cancelado. Si querés reservar otro, podés hacerlo
-            desde la página de {appointment.barbershop_name}.
-          </p>
+          ) : (
+            <p className="text-sm text-[color:var(--text-muted)]">
+              Este turno ya no está disponible.
+            </p>
+          )
         ) : (
-          <p className="text-sm text-[color:var(--text-muted)]">
-            Este turno ya no está disponible.
+          // ── Modo pasivo: solo informativo (viene del "Ver mi turno") ──
+          <p className="text-sm leading-7 text-[color:var(--text-secondary)]">
+            {isPending
+              ? `Tu turno está pendiente. Te avisaremos cuando ${appointment.barbershop_name} te lo confirme.`
+              : isConfirmed
+                ? `Tu turno está confirmado. Te esperamos en ${appointment.barbershop_name}.`
+                : isCancelled
+                  ? `Este turno está cancelado.`
+                  : `Este turno ya no está disponible.`}
           </p>
         )}
       </div>
