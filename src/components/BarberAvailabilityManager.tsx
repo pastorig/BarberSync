@@ -66,21 +66,24 @@ export function BarberAvailabilityManager({
   const [successMessage, setSuccessMessage] = useState("");
 
   // Análisis "horario vs duración del servicio".
-  // Por cada combinación única de (horario, servicio) calcula cuántos
-  // cortes entran, cuántos minutos sobran y sugiere extender el cierre
-  // si vale la pena meter uno más.
+  // Agrupado por servicio: una entrada por servicio activo, con filas
+  // por cada combinación única de días con el mismo horario.
   const horarioAnalysis = useMemo(() => {
     if (services.length === 0) return [];
 
-    type Combo = {
-      label: string;
+    type ScheduleRow = {
+      daysLabel: string;
       startTime: string;
       endTime: string;
-      service: BarberServiceRow;
       windowMinutes: number;
       cutsFitting: number;
       leftoverMinutes: number;
       suggestedEndTime: string | null;
+    };
+
+    type ServiceAnalysis = {
+      service: BarberServiceRow;
+      rows: ScheduleRow[];
     };
 
     function formatMinutes(total: number): string {
@@ -92,10 +95,23 @@ export function BarberAvailabilityManager({
       return `${h}:${m}`;
     }
 
+    function daysLabel(days: number[]): string {
+      const sorted = [...days].sort((a, b) => a - b);
+      const short = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+      // Si son 5+ días consecutivos, mostrar como rango (ej "Lun-Vie").
+      const isContiguous =
+        sorted.length >= 3 &&
+        sorted.every((d, i) => i === 0 || d === sorted[i - 1] + 1);
+      if (isContiguous) {
+        return `${short[sorted[0]]}-${short[sorted[sorted.length - 1]]}`;
+      }
+      return sorted.map((d) => short[d]).join("·");
+    }
+
     // Agrupamos días activos por (start, end) para un solo análisis por horario.
     const groups = new Map<
       string,
-      { label: string; startTime: string; endTime: string; days: number[] }
+      { startTime: string; endTime: string; days: number[] }
     >();
     for (const schedule of weeklySchedules) {
       if (!schedule.isWorking) continue;
@@ -105,7 +121,6 @@ export function BarberAvailabilityManager({
         existing.days.push(schedule.dayOfWeek);
       } else {
         groups.set(key, {
-          label: "",
           startTime: schedule.startTime,
           endTime: schedule.endTime,
           days: [schedule.dayOfWeek],
@@ -113,47 +128,40 @@ export function BarberAvailabilityManager({
       }
     }
 
-    function daysLabel(days: number[]): string {
-      const sorted = [...days].sort((a, b) => a - b);
-      const short = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-      return sorted.map((d) => short[d]).join("·");
-    }
+    const analyses: ServiceAnalysis[] = [];
+    for (const service of services) {
+      const duration = service.duration_minutes ?? 0;
+      if (duration <= 0) continue;
 
-    const combos: Combo[] = [];
-    for (const group of groups.values()) {
-      const startMinutes = timeValueToMinutes(group.startTime);
-      const endMinutes = timeValueToMinutes(group.endTime);
-      const windowMinutes = endMinutes - startMinutes;
-      if (windowMinutes <= 0) continue;
-
-      for (const service of services) {
-        const duration = service.duration_minutes ?? 0;
-        if (duration <= 0) continue;
+      const rows: ScheduleRow[] = [];
+      for (const group of groups.values()) {
+        const startMinutes = timeValueToMinutes(group.startTime);
+        const endMinutes = timeValueToMinutes(group.endTime);
+        const windowMinutes = endMinutes - startMinutes;
+        if (windowMinutes <= 0) continue;
 
         const cutsFitting = Math.floor(windowMinutes / duration);
         const leftoverMinutes = windowMinutes - cutsFitting * duration;
-        // Sugerimos extender solo si sobra ≥ 1 min y el corte extra entraría
-        // con menos de la duración extra (ej: sobran 30 min, faltarían 15
-        // para meter el corte de 45 → sugerimos +15).
         let suggestedEndTime: string | null = null;
         if (leftoverMinutes > 0) {
           const missingMinutes = duration - leftoverMinutes;
           suggestedEndTime = formatMinutes(endMinutes + missingMinutes);
         }
 
-        combos.push({
-          label: daysLabel(group.days),
+        rows.push({
+          daysLabel: daysLabel(group.days),
           startTime: group.startTime,
           endTime: group.endTime,
-          service,
           windowMinutes,
           cutsFitting,
           leftoverMinutes,
           suggestedEndTime,
         });
       }
+
+      if (rows.length > 0) analyses.push({ service, rows });
     }
-    return combos;
+    return analyses;
   }, [weeklySchedules, services]);
 
   const sortedBlocks = useMemo(
@@ -459,72 +467,110 @@ export function BarberAvailabilityManager({
           </form>
 
           {horarioAnalysis.length > 0 ? (
-            <div className="mt-5 rounded-md border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-3">
+            <div className="mt-5">
               <p className="text-[11px] font-bold uppercase text-[color:var(--brand-gold)]">
                 Aprovechamiento del horario
               </p>
               <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-                Cuántos cortes entran en tu jornada con cada duración de
-                servicio. Si sobran minutos, te sugerimos cómo cerrar más
-                tarde para meter uno más.
+                Cuántos cortes entran en tu jornada por servicio. Si sobran
+                minutos, te sugerimos cerrar más tarde para meter uno más.
               </p>
-              <ul className="mt-3 grid gap-2">
-                {horarioAnalysis.map((combo) => {
-                  const totalIfExtended = combo.cutsFitting + 1;
-                  return (
-                    <li
-                      key={`${combo.label}-${combo.service.id}`}
-                      className="rounded-md border border-[color:var(--border-default)] bg-black/30 px-3 py-2"
-                    >
-                      <p className="text-xs font-semibold text-white">
-                        <span className="text-[color:var(--brand-gold)]">
-                          {combo.label}
-                        </span>{" "}
-                        {combo.startTime}–{combo.endTime}
-                        <span className="mx-1 text-[color:var(--text-subtle)]">
-                          ·
-                        </span>
-                        {combo.service.name}{" "}
-                        <span className="font-mono text-[10px] text-[color:var(--text-muted)]">
-                          ({combo.service.duration_minutes} min)
-                        </span>
+              <div className="mt-3 grid gap-3">
+                {horarioAnalysis.map(({ service, rows }) => (
+                  <div
+                    key={service.id}
+                    className="rounded-md border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-3"
+                  >
+                    <div className="flex items-baseline justify-between gap-3 border-b border-[color:var(--border-subtle)] pb-2">
+                      <p className="text-sm font-bold text-white">
+                        {service.name}
                       </p>
-                      <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-                        Entran{" "}
-                        <span className="font-mono font-bold text-white">
-                          {combo.cutsFitting}
-                        </span>{" "}
-                        {combo.cutsFitting === 1 ? "corte" : "cortes"}
-                        {combo.leftoverMinutes > 0 ? (
-                          <>
-                            {" · sobran "}
-                            <span className="font-mono font-bold text-[color:var(--brand-gold)]">
-                              {combo.leftoverMinutes} min
-                            </span>
-                          </>
-                        ) : (
-                          <span className="ml-2 text-[10px] uppercase tracking-[0.14em] text-[color:var(--success)]">
-                            · aprovechás el 100%
-                          </span>
-                        )}
+                      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+                        {service.duration_minutes} min
                       </p>
-                      {combo.suggestedEndTime ? (
-                        <p className="mt-1 text-[11px] text-[color:var(--text-secondary)]">
-                          Cerrá a las{" "}
-                          <span className="font-mono font-bold text-[color:var(--brand-gold)]">
-                            {combo.suggestedEndTime}
-                          </span>{" "}
-                          y metés{" "}
-                          <span className="font-bold text-white">
-                            {totalIfExtended}
-                          </span>{" "}
-                          {totalIfExtended === 1 ? "corte" : "cortes"}.
-                        </p>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+                    </div>
+
+                    <ul className="mt-3 grid gap-2.5">
+                      {rows.map((row) => {
+                        const cutWidth =
+                          (service.duration_minutes / row.windowMinutes) * 100;
+                        const leftoverWidth =
+                          (row.leftoverMinutes / row.windowMinutes) * 100;
+                        const isExact = row.leftoverMinutes === 0;
+                        return (
+                          <li
+                            key={`${service.id}-${row.daysLabel}-${row.startTime}`}
+                            className="grid gap-1.5"
+                          >
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                              <span className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--brand-gold)]">
+                                {row.daysLabel}
+                              </span>
+                              <span className="font-mono text-[10px] text-[color:var(--text-muted)]">
+                                {row.startTime}–{row.endTime}
+                              </span>
+                              <span className="ml-auto font-mono text-xs tabular-nums text-white">
+                                <span className="font-bold">
+                                  {row.cutsFitting}
+                                </span>{" "}
+                                <span className="text-[color:var(--text-muted)]">
+                                  {row.cutsFitting === 1 ? "corte" : "cortes"}
+                                </span>
+                                {isExact ? null : (
+                                  <span className="ml-2 text-[10px] text-[color:var(--text-muted)]">
+                                    · sobran{" "}
+                                    <span className="font-bold text-[color:var(--brand-gold)]">
+                                      {row.leftoverMinutes}min
+                                    </span>
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+
+                            {/* Barra de aprovechamiento */}
+                            <div className="flex h-2 w-full gap-[2px] overflow-hidden rounded-full bg-black/40">
+                              {Array.from({ length: row.cutsFitting }).map(
+                                (_, idx) => (
+                                  <span
+                                    key={idx}
+                                    style={{ width: `${cutWidth}%` }}
+                                    className="h-full bg-[color:var(--brand-gold)]"
+                                  />
+                                ),
+                              )}
+                              {row.leftoverMinutes > 0 ? (
+                                <span
+                                  style={{ width: `${leftoverWidth}%` }}
+                                  className="h-full bg-[color:var(--border-strong)]"
+                                  title={`${row.leftoverMinutes} min sin usar`}
+                                />
+                              ) : null}
+                            </div>
+
+                            {row.suggestedEndTime ? (
+                              <p className="text-[11px] text-[color:var(--text-secondary)]">
+                                Cerrá a las{" "}
+                                <span className="font-mono font-bold text-[color:var(--brand-gold)]">
+                                  {row.suggestedEndTime}
+                                </span>{" "}
+                                y entran{" "}
+                                <span className="font-bold text-white">
+                                  {row.cutsFitting + 1}
+                                </span>{" "}
+                                cortes.
+                              </p>
+                            ) : (
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--success)]">
+                                Aprovechás el 100%
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 
