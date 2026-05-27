@@ -228,6 +228,16 @@ export function buildAvailabilitySlots(params: {
     }
   }
 
+  // 2c) Slot final que termine exacto en el cierre, si entra dentro del
+  //     horario laboral. Esto cubre el caso donde el grid base (cada
+  //     `gridStep` minutos) deja tiempo muerto al final del día.
+  //     Ej: servicio 45 min, horario 16:00-21:00, grid 30 → grid llega
+  //     hasta 20:00 (termina 20:45). Agregamos 20:15 (termina 21:00).
+  const closingSlotStart = dayEnd - appointmentDurationMinutes;
+  if (closingSlotStart >= dayStart) {
+    candidateTimes.add(closingSlotStart);
+  }
+
   // 3) Filtramos candidatos solapados con turnos/bloques.
   const slots: AvailabilitySlot[] = [];
   const sortedTimes = [...candidateTimes].sort((a, b) => a - b);
