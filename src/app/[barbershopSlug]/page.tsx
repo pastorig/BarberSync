@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PublicBarbershopLanding } from "@/components/PublicBarbershopLanding";
-import { listKnownBarbershops, resolveBarbershopBySlug } from "@/lib/barbershops";
+import { resolveBarbershopBySlug } from "@/lib/barbershops";
 
 type BarbershopPageProps = {
   params: Promise<{
@@ -8,13 +8,9 @@ type BarbershopPageProps = {
   }>;
 };
 
-export async function generateStaticParams() {
-  const { data } = await listKnownBarbershops();
-
-  return data.map((barbershop) => ({
-    barbershopSlug: barbershop.slug,
-  }));
-}
+// Dinámica: la landing tiene que reflejar cambios en barberos, servicios
+// y configuración apenas se hacen vía admin, no esperar al próximo build.
+export const dynamic = "force-dynamic";
 
 export default async function BarbershopPage({
   params,

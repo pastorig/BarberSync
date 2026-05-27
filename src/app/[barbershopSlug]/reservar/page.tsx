@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookingForm } from "@/components/BookingForm";
 import { Logo } from "@/components/ui";
-import { listKnownBarbershops, resolveBarbershopBySlug } from "@/lib/barbershops";
+import { resolveBarbershopBySlug } from "@/lib/barbershops";
 
 type BookingPageProps = {
   params: Promise<{
@@ -10,13 +10,9 @@ type BookingPageProps = {
   }>;
 };
 
-export async function generateStaticParams() {
-  const { data } = await listKnownBarbershops();
-
-  return data.map((barbershop) => ({
-    barbershopSlug: barbershop.slug,
-  }));
-}
+// Dinámica: la reserva tiene que ver barberos/servicios actualizados al instante,
+// no esperar al próximo build cuando el admin agrega o desactiva algo.
+export const dynamic = "force-dynamic";
 
 export default async function BookingPage({ params }: BookingPageProps) {
   const { barbershopSlug } = await params;
