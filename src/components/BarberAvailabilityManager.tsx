@@ -60,6 +60,7 @@ export function BarberAvailabilityManager({
   const [blockForm, setBlockForm] = useState(createInitialBlockForm());
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingSchedules, setIsSavingSchedules] = useState(false);
+  const [isApplyingSuggestion, setIsApplyingSuggestion] = useState(false);
   const [isCreatingBlock, setIsCreatingBlock] = useState(false);
   const [deletingBlockId, setDeletingBlockId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -72,6 +73,7 @@ export function BarberAvailabilityManager({
     if (services.length === 0) return [];
 
     type ScheduleRow = {
+      days: number[];
       daysLabel: string;
       startTime: string;
       endTime: string;
@@ -149,6 +151,7 @@ export function BarberAvailabilityManager({
         }
 
         rows.push({
+          days: group.days,
           daysLabel: daysLabel(group.days),
           startTime: group.startTime,
           endTime: group.endTime,
@@ -295,6 +298,59 @@ export function BarberAvailabilityManager({
       setErrorMessage("No pudimos guardar los horarios semanales.");
     } finally {
       setIsSavingSchedules(false);
+    }
+  }
+
+  async function handleApplySuggestion(
+    daysList: number[],
+    newEndTime: string,
+  ) {
+    const daysNames = daysList
+      .map((d) => WEEKDAY_LABELS[d])
+      .join(", ");
+    const ok = window.confirm(
+      `¿Aplicar cierre a las ${newEndTime} para ${daysNames}?`,
+    );
+    if (!ok) return;
+
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIsApplyingSuggestion(true);
+
+    const targetDays = new Set(daysList);
+    const updated = weeklySchedules.map((schedule) =>
+      targetDays.has(schedule.dayOfWeek)
+        ? { ...schedule, endTime: newEndTime }
+        : schedule,
+    );
+
+    try {
+      const { data, error } = await upsertWeeklySchedulesForBarber({
+        barbershopSlug: barbershop.slug,
+        barberId: barber.id,
+        schedules: updated.map((schedule) => ({
+          dayOfWeek: schedule.dayOfWeek,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          isWorking: schedule.isWorking,
+        })),
+      });
+
+      if (error) {
+        setErrorMessage("No pudimos aplicar la sugerencia.");
+        return;
+      }
+
+      setWeeklySchedules(
+        mergeWeeklySchedulesWithDefaults(data ?? [], barbershop.workingHours),
+      );
+      setSuccessMessage(
+        `Horario actualizado: ${daysNames} cierran a las ${newEndTime}.`,
+      );
+    } catch {
+      setErrorMessage("No pudimos aplicar la sugerencia.");
+    } finally {
+      setIsApplyingSuggestion(false);
     }
   }
 
@@ -548,17 +604,37 @@ export function BarberAvailabilityManager({
                             </div>
 
                             {row.suggestedEndTime ? (
-                              <p className="text-[11px] text-[color:var(--text-secondary)]">
-                                Cerrá a las{" "}
-                                <span className="font-mono font-bold text-[color:var(--brand-gold)]">
-                                  {row.suggestedEndTime}
-                                </span>{" "}
-                                y entran{" "}
-                                <span className="font-bold text-white">
-                                  {row.cutsFitting + 1}
-                                </span>{" "}
-                                cortes.
-                              </p>
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-[11px] text-[color:var(--text-secondary)]">
+                                  Cerrá a las{" "}
+                                  <span className="font-mono font-bold text-[color:var(--brand-gold)]">
+                                    {row.suggestedEndTime}
+                                  </span>{" "}
+                                  y entran{" "}
+                                  <span className="font-bold text-white">
+                                    {row.cutsFitting + 1}
+                                  </span>{" "}
+                                  cortes.
+                                </p>
+                                <button
+                                  type="button"
+                                  disabled={
+                                    isApplyingSuggestion || isSavingSchedules
+                                  }
+                                  onClick={() =>
+                                    row.suggestedEndTime &&
+                                    handleApplySuggestion(
+                                      row.days,
+                                      row.suggestedEndTime,
+                                    )
+                                  }
+                                  className="inline-flex min-h-7 items-center justify-center rounded-[var(--radius-sm)] border border-[color:var(--brand-gold)]/40 px-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--brand-gold)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {isApplyingSuggestion
+                                    ? "Aplicando…"
+                                    : `Aplicar ${row.suggestedEndTime}`}
+                                </button>
+                              </div>
                             ) : (
                               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--success)]">
                                 Aprovechás el 100%
