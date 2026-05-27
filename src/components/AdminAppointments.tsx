@@ -566,25 +566,45 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       const gap = nextStart - currentEnd;
 
                       if (gap > 0) {
-                        // Cortes posibles = capacidad del barbero más
-                        // "rápido" entre el turno previo y el siguiente
-                        // (duración mínima de sus servicios activos).
-                        // Si los dos son el mismo barbero, da lo mismo.
+                        // Capacidad estimada según servicios activos de cada
+                        // barbero. Si los dos barberos del gap tienen MISMA
+                        // duración mínima (o son el mismo), mostramos un solo
+                        // número. Si difieren, desglosamos por barbero.
                         const prevMin = minDurationByBarber.get(
                           appointment.barber_id,
                         );
                         const nextMin = minDurationByBarber.get(next.barber_id);
-                        const candidates = [prevMin, nextMin].filter(
-                          (m): m is number => typeof m === "number" && m > 0,
-                        );
-                        const duration =
-                          candidates.length > 0
-                            ? Math.min(...candidates)
-                            : undefined;
-                        const possibleCuts =
-                          duration && duration > 0
-                            ? Math.floor(gap / duration)
-                            : 0;
+                        const sameBarber =
+                          appointment.barber_id === next.barber_id;
+
+                        let possibleCuts = 0;
+                        let perBarber:
+                          | Array<{ name: string; cuts: number }>
+                          | null = null;
+
+                        if (sameBarber) {
+                          if (prevMin && prevMin > 0) {
+                            possibleCuts = Math.floor(gap / prevMin);
+                          }
+                        } else if (prevMin && nextMin && prevMin === nextMin) {
+                          possibleCuts = Math.floor(gap / prevMin);
+                        } else if (prevMin && nextMin) {
+                          perBarber = [
+                            {
+                              name: appointment.barber_name,
+                              cuts: Math.floor(gap / prevMin),
+                            },
+                            {
+                              name: next.barber_name,
+                              cuts: Math.floor(gap / nextMin),
+                            },
+                          ];
+                        } else if (prevMin) {
+                          possibleCuts = Math.floor(gap / prevMin);
+                        } else if (nextMin) {
+                          possibleCuts = Math.floor(gap / nextMin);
+                        }
+
                         nodes.push(
                           <GapMarker
                             key={`gap-${appointment.id ?? index}`}
@@ -592,6 +612,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                             endMinutes={nextStart}
                             minutes={gap}
                             possibleCuts={possibleCuts}
+                            perBarber={perBarber}
                           />,
                         );
                       }
@@ -647,20 +668,27 @@ function GapMarker({
   endMinutes,
   minutes,
   possibleCuts,
+  perBarber,
 }: {
   startMinutes: number;
   endMinutes: number;
   minutes: number;
-  /** Cortes que entrarían en el hueco (0 si no aplica, ej: distintos barberos). */
+  /** Cortes que entrarían en el hueco si solo importa la capacidad global. */
   possibleCuts: number;
+  /** Si los barberos del gap tienen duraciones distintas, breakdown por barbero. */
+  perBarber: Array<{ name: string; cuts: number }> | null;
 }) {
+  const ariaLabel = perBarber
+    ? `Hueco libre de ${minutes} minutos. ${perBarber
+        .map((b) => `${b.name}: ${b.cuts} cortes`)
+        .join(", ")}`
+    : possibleCuts > 0
+      ? `Hueco libre de ${minutes} minutos, ${possibleCuts} cortes posibles`
+      : `Hueco libre de ${minutes} minutos`;
+
   return (
     <li
-      aria-label={
-        possibleCuts > 0
-          ? `Hueco libre de ${minutes} minutos, ${possibleCuts} cortes posibles`
-          : `Hueco libre de ${minutes} minutos`
-      }
+      aria-label={ariaLabel}
       className="flex items-center gap-3 px-2 py-1"
     >
       <span className="h-px flex-1 bg-[color:var(--border-subtle)]" aria-hidden="true" />
@@ -670,7 +698,20 @@ function GapMarker({
           <span className="mx-1 text-[color:var(--text-subtle)]">→</span>
           {formatMinutesToTime(endMinutes)}
         </span>
-        {possibleCuts > 0 ? (
+        {perBarber ? (
+          <span className="text-[color:var(--brand-gold)]">
+            {perBarber.map((b, idx) => (
+              <span key={`${b.name}-${idx}`}>
+                {idx > 0 ? (
+                  <span className="mx-1 text-[color:var(--text-subtle)]">/</span>
+                ) : null}
+                {b.name}: {b.cuts}
+              </span>
+            ))}
+            <span className="mx-1 text-[color:var(--text-subtle)]">·</span>
+            {formatGapDuration(minutes)} libres
+          </span>
+        ) : possibleCuts > 0 ? (
           <span className="text-[color:var(--brand-gold)]">
             {possibleCuts} {possibleCuts === 1 ? "corte" : "cortes"} posibles
             <span className="mx-1 text-[color:var(--text-subtle)]">·</span>
