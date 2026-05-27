@@ -83,29 +83,52 @@ type Stats = {
   confirmed: number;
   pending: number;
   cancelled: number;
+  /** Ingresos asegurados (solo confirmados). */
   revenue: number;
+  /** Ingresos si todos los pendientes se confirman (confirmados + pendientes). */
+  potentialRevenue: number;
+  /** Ticket promedio sobre turnos confirmados. */
   ticketAvg: number;
+  /** % de turnos confirmados sobre el total activo. */
+  confirmationRate: number;
+  /** % de turnos cancelados sobre el total activo. */
   cancellationRate: number;
+  /** Promedio de turnos por día del período. */
+  avgPerDay: number;
 };
 
-function computeStats(appointments: AppointmentRow[]): Stats {
+function computeStats(
+  appointments: AppointmentRow[],
+  days: number,
+): Stats {
   const active = appointments.filter((a) => a.status !== "deleted");
   const confirmed = active.filter((a) => a.status === "confirmed");
   const pending = active.filter((a) => a.status === "pending");
   const cancelled = active.filter((a) => a.status === "cancelled");
-  const billable = [...confirmed, ...pending];
-  const revenue = billable.reduce((acc, a) => acc + (a.service_price ?? 0), 0);
-  const ticketAvg = billable.length > 0 ? revenue / billable.length : 0;
+  const revenue = confirmed.reduce(
+    (acc, a) => acc + (a.service_price ?? 0),
+    0,
+  );
+  const potentialRevenue =
+    revenue +
+    pending.reduce((acc, a) => acc + (a.service_price ?? 0), 0);
+  const ticketAvg = confirmed.length > 0 ? revenue / confirmed.length : 0;
+  const confirmationRate =
+    active.length > 0 ? (confirmed.length / active.length) * 100 : 0;
   const cancellationRate =
     active.length > 0 ? (cancelled.length / active.length) * 100 : 0;
+  const avgPerDay = days > 0 ? active.length / days : 0;
   return {
     total: active.length,
     confirmed: confirmed.length,
     pending: pending.length,
     cancelled: cancelled.length,
     revenue,
+    potentialRevenue,
     ticketAvg,
+    confirmationRate,
     cancellationRate,
+    avgPerDay,
   };
 }
 
@@ -193,12 +216,14 @@ export function AdminReportes({ barbershop }: AdminReportesProps) {
     [appointments, matchesBarber, previousRange],
   );
 
-  const stats = useMemo(() => computeStats(currentAppointments), [
-    currentAppointments,
-  ]);
-  const previousStats = useMemo(() => computeStats(previousAppointments), [
-    previousAppointments,
-  ]);
+  const stats = useMemo(
+    () => computeStats(currentAppointments, currentRange.days),
+    [currentAppointments, currentRange.days],
+  );
+  const previousStats = useMemo(
+    () => computeStats(previousAppointments, previousRange.days),
+    [previousAppointments, previousRange.days],
+  );
 
   // Producción por barbero
   const byBarber = useMemo(() => {
@@ -292,6 +317,75 @@ export function AdminReportes({ barbershop }: AdminReportesProps) {
       .slice(0, 8);
   }, [appointments, matchesBarber]);
 
+  // Día más activo de la semana (cuenta turnos activos por día)
+  const weekDayStats = useMemo(() => {
+    const counts = new Array(7).fill(0) as number[];
+    currentAppointments
+      .filter((a) => a.status !== "deleted")
+      .forEach((a) => {
+        const date = parseYmd(normalizeDateValue(a.appointment_date));
+        const dow = date.getDay(); // 0=Dom
+        counts[dow] += 1;
+      });
+    const max = Math.max(...counts, 0);
+    // Reordenamos a Lun→Dom para mostrar
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    const labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+    const rows = order.map((dow, index) => ({
+      dow,
+      label: labels[index],
+      count: counts[dow],
+      ratio: max > 0 ? counts[dow] / max : 0,
+    }));
+    const top = rows.reduce(
+      (best, current) => (current.count > best.count ? current : best),
+      { label: "", count: 0, dow: -1, ratio: 0 },
+    );
+    return { rows, top };
+  }, [currentAppointments]);
+
+  // Clientes nuevos vs recurrentes en el período actual
+  const clientMix = useMemo(() => {
+    const periodStart = currentRange.start;
+    // Identificamos clientes por teléfono normalizado.
+    const uniqueInPeriod = new Map<string, AppointmentRow>();
+    currentAppointments
+      .filter((a) => a.status !== "deleted")
+      .forEach((a) => {
+        const key = (a.customer_phone ?? "").trim() || a.customer_name;
+        if (!uniqueInPeriod.has(key)) uniqueInPeriod.set(key, a);
+      });
+
+    // Set de clientes con turnos previos al inicio del período.
+    const priorClients = new Set<string>();
+    appointments
+      .filter(
+        (a) =>
+          matchesBarber(a) &&
+          a.status !== "deleted" &&
+          normalizeDateValue(a.appointment_date) < periodStart,
+      )
+      .forEach((a) => {
+        const key = (a.customer_phone ?? "").trim() || a.customer_name;
+        priorClients.add(key);
+      });
+
+    let nuevos = 0;
+    let recurrentes = 0;
+    uniqueInPeriod.forEach((_, key) => {
+      if (priorClients.has(key)) recurrentes += 1;
+      else nuevos += 1;
+    });
+    const total = nuevos + recurrentes;
+    return {
+      nuevos,
+      recurrentes,
+      total,
+      nuevosPct: total > 0 ? (nuevos / total) * 100 : 0,
+      recurrentesPct: total > 0 ? (recurrentes / total) * 100 : 0,
+    };
+  }, [appointments, currentAppointments, currentRange.start, matchesBarber]);
+
   const barberOptions = useMemo(() => {
     if (barbers.length > 0) {
       return barbers.map((b) => ({
@@ -373,44 +467,105 @@ export function AdminReportes({ barbershop }: AdminReportesProps) {
             ) : null}
           </section>
 
-          {/* KPIs */}
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <KpiCard
-              label="Turnos"
-              value={String(stats.total)}
-              change={percentChange(stats.total, previousStats.total)}
-            />
-            <KpiCard
-              label="Confirmados"
-              value={String(stats.confirmed)}
-              change={percentChange(stats.confirmed, previousStats.confirmed)}
-            />
-            <KpiCard
-              label="Cancelados"
-              value={String(stats.cancelled)}
-              change={percentChange(stats.cancelled, previousStats.cancelled)}
-              invertChange
-            />
-            <KpiCard
-              label="Ingresos"
-              value={formatPrice(stats.revenue)}
-              change={percentChange(stats.revenue, previousStats.revenue)}
-              highlight
-            />
-            <KpiCard
-              label="Ticket promedio"
-              value={formatPrice(Math.round(stats.ticketAvg))}
-              change={percentChange(stats.ticketAvg, previousStats.ticketAvg)}
-            />
-            <KpiCard
-              label="Tasa cancelación"
-              value={`${stats.cancellationRate.toFixed(1)}%`}
-              change={percentChange(
-                stats.cancellationRate,
-                previousStats.cancellationRate,
-              )}
-              invertChange
-            />
+          {/* KPIs · Operación */}
+          <section>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
+              Operación
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <KpiCard
+                label="Turnos"
+                value={String(stats.total)}
+                change={percentChange(stats.total, previousStats.total)}
+              />
+              <KpiCard
+                label="Confirmados"
+                value={String(stats.confirmed)}
+                change={percentChange(
+                  stats.confirmed,
+                  previousStats.confirmed,
+                )}
+              />
+              <KpiCard
+                label="Cancelados"
+                value={String(stats.cancelled)}
+                change={percentChange(
+                  stats.cancelled,
+                  previousStats.cancelled,
+                )}
+                invertChange
+              />
+              <KpiCard
+                label="Promedio por día"
+                value={stats.avgPerDay.toFixed(1)}
+                change={percentChange(
+                  stats.avgPerDay,
+                  previousStats.avgPerDay,
+                )}
+              />
+            </div>
+          </section>
+
+          {/* KPIs · Ingresos */}
+          <section>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
+              Ingresos
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <KpiCard
+                label="Ingresos (confirmados)"
+                value={formatPrice(stats.revenue)}
+                change={percentChange(stats.revenue, previousStats.revenue)}
+                highlight
+              />
+              <KpiCard
+                label="Ingresos potenciales"
+                value={formatPrice(stats.potentialRevenue)}
+                hint={
+                  stats.pending > 0
+                    ? `Si confirmás los ${stats.pending} pendientes`
+                    : "Sin turnos pendientes"
+                }
+                change={percentChange(
+                  stats.potentialRevenue,
+                  previousStats.potentialRevenue,
+                )}
+              />
+              <KpiCard
+                label="Ticket promedio"
+                value={formatPrice(Math.round(stats.ticketAvg))}
+                change={percentChange(
+                  stats.ticketAvg,
+                  previousStats.ticketAvg,
+                )}
+              />
+            </div>
+          </section>
+
+          {/* KPIs · Tasas */}
+          <section>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
+              Tasas
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <KpiCard
+                label="Confirmación"
+                value={`${stats.confirmationRate.toFixed(1)}%`}
+                change={percentChange(
+                  stats.confirmationRate,
+                  previousStats.confirmationRate,
+                )}
+              />
+              <KpiCard
+                label="Cancelación"
+                value={`${stats.cancellationRate.toFixed(1)}%`}
+                change={percentChange(
+                  stats.cancellationRate,
+                  previousStats.cancellationRate,
+                )}
+                invertChange
+              />
+            </div>
           </section>
 
           {/* Producción por barbero */}
@@ -532,7 +687,104 @@ export function AdminReportes({ barbershop }: AdminReportesProps) {
             </div>
           </section>
 
-          {/* Clientes recurrentes */}
+          {/* Día más activo + Clientes nuevos vs recurrentes */}
+          <section className="grid gap-8 lg:grid-cols-2">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
+                Día más activo
+              </p>
+              {weekDayStats.top.count === 0 ? (
+                <p className="mt-4 text-sm text-[color:var(--text-subtle)]">
+                  Sin datos en este período.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-4 font-mono text-2xl font-black tabular-nums leading-none text-[color:var(--brand-gold)]">
+                    {weekDayStats.top.label}
+                    <span className="ml-3 text-base font-bold text-white">
+                      {weekDayStats.top.count}{" "}
+                      {weekDayStats.top.count === 1 ? "turno" : "turnos"}
+                    </span>
+                  </p>
+                  <ul className="mt-4 grid gap-1.5">
+                    {weekDayStats.rows.map((row) => (
+                      <li key={row.dow} className="flex items-center gap-3">
+                        <span className="w-10 shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                          {row.label}
+                        </span>
+                        <div className="relative h-5 flex-1 overflow-hidden rounded-[var(--radius-xs)] bg-[color:var(--surface-1)]">
+                          <div
+                            className={cn(
+                              "h-full",
+                              row.dow === weekDayStats.top.dow
+                                ? "bg-[color:var(--brand-gold)]"
+                                : "bg-[color:var(--brand-silver)]/40",
+                            )}
+                            style={{ width: `${row.ratio * 100}%` }}
+                          />
+                        </div>
+                        <span className="w-8 shrink-0 text-right font-mono text-xs font-bold tabular-nums text-white">
+                          {row.count}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
+                Clientes en el período
+              </p>
+              {clientMix.total === 0 ? (
+                <p className="mt-4 text-sm text-[color:var(--text-subtle)]">
+                  Sin clientes en este período.
+                </p>
+              ) : (
+                <>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-[var(--radius-sm)] border border-[color:var(--brand-gold)]/30 bg-[color:var(--brand-gold-soft)] p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--brand-gold)]">
+                        Nuevos
+                      </p>
+                      <p className="mt-1 font-mono text-2xl font-black tabular-nums leading-none text-[color:var(--brand-gold)]">
+                        {clientMix.nuevos}
+                      </p>
+                      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+                        {clientMix.nuevosPct.toFixed(0)}% del total
+                      </p>
+                    </div>
+                    <div className="rounded-[var(--radius-sm)] border border-[color:var(--border-subtle)] p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
+                        Recurrentes
+                      </p>
+                      <p className="mt-1 font-mono text-2xl font-black tabular-nums leading-none text-white">
+                        {clientMix.recurrentes}
+                      </p>
+                      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+                        {clientMix.recurrentesPct.toFixed(0)}% del total
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-[color:var(--surface-1)]">
+                    <div className="flex h-full">
+                      <div
+                        className="h-full bg-[color:var(--brand-gold)]"
+                        style={{ width: `${clientMix.nuevosPct}%` }}
+                      />
+                      <div
+                        className="h-full bg-[color:var(--brand-silver)]/60"
+                        style={{ width: `${clientMix.recurrentesPct}%` }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* Clientes recurrentes (histórico) */}
           <section>
             <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
               Clientes recurrentes
@@ -584,6 +836,7 @@ function KpiCard({
   change,
   highlight,
   invertChange,
+  hint,
 }: {
   label: string;
   value: string;
@@ -591,6 +844,8 @@ function KpiCard({
   highlight?: boolean;
   /** Si true, una caída cuenta como mejora (ej: cancelaciones). */
   invertChange?: boolean;
+  /** Texto opcional debajo del valor (ej: contexto del cálculo). */
+  hint?: string;
 }) {
   return (
     <div
@@ -612,6 +867,11 @@ function KpiCard({
       >
         {value}
       </p>
+      {hint ? (
+        <p className="mt-1 text-[10px] text-[color:var(--text-subtle)]">
+          {hint}
+        </p>
+      ) : null}
       <ChangeBadge change={change} invertChange={invertChange} />
     </div>
   );
