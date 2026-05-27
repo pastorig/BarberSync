@@ -410,7 +410,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Buscar cliente por nombre o teléfono…"
                     aria-label="Buscar cliente"
-                    className="h-11 w-full rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-[color:var(--surface-0)] pl-9 pr-9 text-sm text-white placeholder:text-[color:var(--text-subtle)] focus:border-[color:var(--brand-gold)] focus:outline-none"
+                    className="h-11 w-full appearance-none rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-[color:var(--surface-0)] pl-9 pr-9 text-sm text-white placeholder:text-[color:var(--text-subtle)] focus:border-[color:var(--brand-gold)] focus:outline-none [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
                   />
                   {searchQuery ? (
                     <button
