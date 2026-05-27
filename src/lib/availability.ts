@@ -122,21 +122,25 @@ function rangesOverlap(
 /**
  * Construye los slots disponibles del día para un barbero específico.
  *
- * Algoritmo combinado (sin huecos + buen aprovechamiento del horario):
- *  1. Genera tiempos candidatos cada `barbershopIntervalMinutes` desde
- *     el inicio del día (grid base — da al cliente horarios "redondos").
- *  2. Agrega tiempos candidatos que empiezan JUSTO al terminar cada
- *     turno o bloque (evita huecos cuando los servicios no encajan
- *     en el grid fijo, ej. cortes de 45 min con grid de 30).
- *  3. Para cada candidato verifica que no solape con turnos/bloques y
- *     que su duración entre dentro del horario laboral.
+ * Algoritmo "una grilla por servicio" (sin huecos, consistente):
+ *  1. Por cada hueco libre del día (entre turnos/bloques) genera slots
+ *     cada `appointmentDurationMinutes`. El primer slot del hueco
+ *     empieza JUSTO al inicio del hueco (post-turno o apertura del día),
+ *     así no queda tiempo perdido entre cortes.
+ *  2. Agrega un slot final que termine exacto en el cierre, si entra
+ *     dentro del horario.
+ *  3. Filtra los candidatos que solapan con turnos/bloques.
  *  4. Marca como `past` los que ya pasaron en el día actual.
  *
- * Sólo se devuelven slots con razón `available` o `past`. Los slots
- * ocupados o bloqueados no aparecen — la UI muestra una lista limpia.
+ * El grid sigue la duración del SERVICIO ELEGIDO. Si Juan corta cada
+ * 45 min, sus slots son 16:00, 16:45, 17:30, … Si Ricardo corta cada
+ * 30 min, los suyos son 16:00, 16:30, 17:00, …
  *
- * `barbershopIntervalMinutes` se usa como granularidad del grid base y
- * como fallback defensivo para turnos viejos sin duración cargada.
+ * Sólo se devuelven slots con razón `available` o `past`. Los slots
+ * ocupados/bloqueados no aparecen — la UI muestra una lista limpia.
+ *
+ * `barbershopIntervalMinutes` se usa como fallback defensivo para
+ * turnos viejos sin duración cargada.
  */
 export function buildAvailabilitySlots(params: {
   appointmentDate: string;
@@ -210,29 +214,34 @@ export function buildAvailabilitySlots(params: {
   // 2) Generamos el set de tiempos candidatos.
   const candidateTimes = new Set<number>();
 
-  // 2a) Grid base cada `barbershopIntervalMinutes`.
-  const gridStep =
-    barbershopIntervalMinutes > 0 ? barbershopIntervalMinutes : 30;
-  for (let t = dayStart; t + appointmentDurationMinutes <= dayEnd; t += gridStep) {
-    candidateTimes.add(t);
-  }
-
-  // 2b) Tiempos dinámicos: justo al terminar cada turno/bloque, para
-  //     no perder minutos entre turnos consecutivos.
-  for (const interval of busyMerged) {
-    if (
-      interval.end >= dayStart &&
-      interval.end + appointmentDurationMinutes <= dayEnd
+  // 2a) Para cada hueco libre, generar slots cada `appointmentDurationMinutes`
+  //     empezando JUSTO al inicio del hueco. Así nunca quedan minutos perdidos
+  //     entre turnos.
+  function addSlotsInRange(rangeStart: number, rangeEnd: number) {
+    const start = Math.max(rangeStart, dayStart);
+    const end = Math.min(rangeEnd, dayEnd);
+    for (
+      let t = start;
+      t + appointmentDurationMinutes <= end;
+      t += appointmentDurationMinutes
     ) {
-      candidateTimes.add(interval.end);
+      candidateTimes.add(t);
     }
   }
 
-  // 2c) Slot final que termine exacto en el cierre, si entra dentro del
-  //     horario laboral. Esto cubre el caso donde el grid base (cada
-  //     `gridStep` minutos) deja tiempo muerto al final del día.
-  //     Ej: servicio 45 min, horario 16:00-21:00, grid 30 → grid llega
-  //     hasta 20:00 (termina 20:45). Agregamos 20:15 (termina 21:00).
+  let cursor = dayStart;
+  for (const interval of busyMerged) {
+    if (interval.start > cursor) {
+      addSlotsInRange(cursor, interval.start);
+    }
+    cursor = Math.max(cursor, interval.end);
+  }
+  if (cursor < dayEnd) {
+    addSlotsInRange(cursor, dayEnd);
+  }
+
+  // 2b) Slot que termina exacto en el cierre, si entra dentro del horario.
+  //     Cubre el caso donde el grid del hueco final deja tiempo muerto.
   const closingSlotStart = dayEnd - appointmentDurationMinutes;
   if (closingSlotStart >= dayStart) {
     candidateTimes.add(closingSlotStart);
