@@ -1,4 +1,5 @@
 import type {
+  BarberDayOverrideRow,
   BarberTimeBlockRow,
   BarberWeeklyScheduleRow,
 } from "@/lib/supabase";
@@ -151,6 +152,7 @@ export function buildAvailabilitySlots(params: {
     end: string;
   };
   weeklySchedules: BarberWeeklyScheduleRow[];
+  dayOverride?: BarberDayOverrideRow | null;
   timeBlocks: BarberTimeBlockRow[];
   appointments: AppointmentInterval[];
   now?: Date;
@@ -161,6 +163,7 @@ export function buildAvailabilitySlots(params: {
     barbershopIntervalMinutes,
     workingHours,
     weeklySchedules,
+    dayOverride,
     timeBlocks,
     appointments,
     now = new Date(),
@@ -174,11 +177,25 @@ export function buildAvailabilitySlots(params: {
     weeklySchedules,
     workingHours,
   );
-  const activeSchedule = mergedSchedules.find(
+  const weeklySchedule = mergedSchedules.find(
     (schedule) => schedule.dayOfWeek === getDayOfWeekFromDate(appointmentDate),
   );
 
-  if (!activeSchedule || !activeSchedule.isWorking) {
+  const activeSchedule = dayOverride
+    ? {
+        startTime: normalizeTimeValue(dayOverride.start_time),
+        endTime: normalizeTimeValue(dayOverride.end_time),
+        isWorking: dayOverride.is_working,
+      }
+    : weeklySchedule
+      ? {
+          startTime: weeklySchedule.startTime,
+          endTime: weeklySchedule.endTime,
+          isWorking: weeklySchedule.isWorking,
+        }
+      : null;
+
+  if (!activeSchedule?.isWorking) {
     return [] satisfies AvailabilitySlot[];
   }
 

@@ -2,7 +2,13 @@ import {
   buildAvailabilitySlots,
   type AppointmentInterval,
 } from "@/lib/availability";
-import { getSupabaseClient, type BarberTimeBlockInsert, type BarberTimeBlockUpdate, type BarberWeeklyScheduleInsert } from "@/lib/supabase";
+import {
+  getSupabaseClient,
+  type BarberDayOverrideInsert,
+  type BarberTimeBlockInsert,
+  type BarberTimeBlockUpdate,
+  type BarberWeeklyScheduleInsert,
+} from "@/lib/supabase";
 
 type BarberLookupInput = {
   barbershopSlug: string;
@@ -31,6 +37,17 @@ type UpdateTimeBlockInput = {
   values: BarberTimeBlockUpdate;
 };
 
+type ListDayOverridesInput = BarberLookupInput & {
+  overrideDate?: string;
+};
+
+type UpsertDayOverrideInput = BarberLookupInput & {
+  overrideDate: string;
+  startTime: string;
+  endTime: string;
+  isWorking: boolean;
+};
+
 type GetBarberDayAvailabilityInput = BarberLookupInput & {
   appointmentDate: string;
   appointmentDurationMinutes: number;
@@ -45,6 +62,8 @@ const weeklySchedulesSelect =
   "id, created_at, barbershop_slug, barber_id, day_of_week, start_time, end_time, is_working";
 const timeBlocksSelect =
   "id, created_at, barbershop_slug, barber_id, block_date, start_time, end_time, reason, is_active, deleted_at";
+const dayOverridesSelect =
+  "id, created_at, barbershop_slug, barber_id, override_date, start_time, end_time, is_working, deleted_at";
 
 export async function listWeeklySchedulesByBarber({
   barbershopSlug,
@@ -109,6 +128,57 @@ export async function listTimeBlocksByBarber({
   return { data, error };
 }
 
+export async function listDayOverridesByBarber({
+  barbershopSlug,
+  barberId,
+  overrideDate,
+}: ListDayOverridesInput) {
+  let query = getSupabaseClient()
+    .from("barber_day_overrides")
+    .select(dayOverridesSelect)
+    .eq("barbershop_slug", barbershopSlug)
+    .eq("barber_id", barberId)
+    .is("deleted_at", null)
+    .order("override_date", { ascending: true });
+
+  if (overrideDate) {
+    query = query.eq("override_date", overrideDate);
+  }
+
+  const { data, error } = await query;
+
+  return { data, error };
+}
+
+export async function upsertDayOverrideForBarber({
+  barbershopSlug,
+  barberId,
+  overrideDate,
+  startTime,
+  endTime,
+  isWorking,
+}: UpsertDayOverrideInput) {
+  const payload: BarberDayOverrideInsert = {
+    barbershop_slug: barbershopSlug,
+    barber_id: barberId,
+    override_date: overrideDate,
+    start_time: startTime,
+    end_time: endTime,
+    is_working: isWorking,
+    deleted_at: null,
+  };
+
+  const { data, error } = await getSupabaseClient()
+    .from("barber_day_overrides")
+    .upsert(payload, {
+      onConflict: "barber_id,override_date",
+    })
+    .select(dayOverridesSelect)
+    .single();
+
+  return { data, error };
+}
+
 export async function createTimeBlock(block: CreateTimeBlockInput) {
   return getSupabaseClient()
     .from("barber_time_blocks")
@@ -161,6 +231,8 @@ async function listPublicBarberDayAppointments({
     data:
       data?.map((appointment) => ({
         startTime: appointment.appointment_time,
+        // La RPC ya devuelve la duracion efectiva del turno:
+        // actual_duration_minutes si existe, y si no la base del servicio.
         durationMinutes: appointment.service_duration_minutes,
       })) ?? [],
     error,
@@ -175,18 +247,32 @@ export async function getBarberDayAvailability({
   barbershopIntervalMinutes,
   workingHours,
 }: GetBarberDayAvailabilityInput) {
-  const [schedulesResult, blocksResult, appointmentsResult] = await Promise.all([
-    listWeeklySchedulesByBarber({ barbershopSlug, barberId }),
-    listTimeBlocksByBarber({ barbershopSlug, barberId, blockDate: appointmentDate }),
-    listPublicBarberDayAppointments({
-      barbershopSlug,
-      barberId,
-      appointmentDate,
-    }),
-  ]);
+  const [schedulesResult, dayOverrideResult, blocksResult, appointmentsResult] =
+    await Promise.all([
+      listWeeklySchedulesByBarber({ barbershopSlug, barberId }),
+      listDayOverridesByBarber({
+        barbershopSlug,
+        barberId,
+        overrideDate: appointmentDate,
+      }),
+      listTimeBlocksByBarber({
+        barbershopSlug,
+        barberId,
+        blockDate: appointmentDate,
+      }),
+      listPublicBarberDayAppointments({
+        barbershopSlug,
+        barberId,
+        appointmentDate,
+      }),
+    ]);
 
   const error =
-    schedulesResult.error ?? blocksResult.error ?? appointmentsResult.error ?? null;
+    schedulesResult.error ??
+    dayOverrideResult.error ??
+    blocksResult.error ??
+    appointmentsResult.error ??
+    null;
 
   if (error) {
     return {
@@ -201,6 +287,7 @@ export async function getBarberDayAvailability({
     barbershopIntervalMinutes,
     workingHours,
     weeklySchedules: schedulesResult.data ?? [],
+    dayOverride: dayOverrideResult.data?.[0] ?? null,
     timeBlocks: blocksResult.data ?? [],
     appointments: (appointmentsResult.data ?? []) as AppointmentInterval[],
   });

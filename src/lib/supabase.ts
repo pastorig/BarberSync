@@ -15,13 +15,14 @@ type AppointmentInsert = {
   appointment_time: string;
   comment: string;
   status: AppointmentStatus;
+  actual_duration_minutes?: number | null;
+  confirmation_token?: string;
 };
 
 type AppointmentRow = Omit<AppointmentInsert, "status"> & {
   id?: string;
   created_at?: string;
   status: AppointmentStatus;
-  confirmation_token?: string;
 };
 
 type BarberInsert = {
@@ -156,6 +157,28 @@ type BarberTimeBlockInsert = Omit<BarberTimeBlockRow, "id" | "created_at"> & {
 
 type BarberTimeBlockUpdate = Partial<BarberTimeBlockInsert>;
 
+type BarberDayOverrideRow = {
+  id: string;
+  created_at: string;
+  barbershop_slug: string;
+  barber_id: string;
+  override_date: string;
+  start_time: string;
+  end_time: string;
+  is_working: boolean;
+  deleted_at: string | null;
+};
+
+type BarberDayOverrideInsert = Omit<
+  BarberDayOverrideRow,
+  "id" | "created_at"
+> & {
+  id?: string;
+  created_at?: string;
+};
+
+type BarberDayOverrideUpdate = Partial<BarberDayOverrideInsert>;
+
 type PublicBarberDayAppointmentRow = {
   appointment_time: string;
   service_duration_minutes: number;
@@ -268,6 +291,12 @@ type Database = {
         Update: BarberTimeBlockUpdate;
         Relationships: [];
       };
+      barber_day_overrides: {
+        Row: BarberDayOverrideRow;
+        Insert: BarberDayOverrideInsert;
+        Update: BarberDayOverrideUpdate;
+        Relationships: [];
+      };
       platform_owners: {
         Row: PlatformOwnerRow;
         Insert: PlatformOwnerInsert;
@@ -366,6 +395,9 @@ export type {
   BarberInsert,
   BarberRow,
   BarberTimeBlockInsert,
+  BarberDayOverrideInsert,
+  BarberDayOverrideRow,
+  BarberDayOverrideUpdate,
   BarberTimeBlockRow,
   BarberTimeBlockUpdate,
   BarberWeeklyScheduleInsert,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
 import {
   cancelAppointment,
@@ -9,6 +9,7 @@ import {
   deleteAppointment,
   listAppointmentsByBarbershop,
   restoreDeletedAppointment,
+  updateAppointmentActualDuration,
 } from "@/lib/appointments";
 import { listActiveServicesByBarbershop } from "@/lib/barber-services";
 import { listBarbersByBarbershop } from "@/lib/barbers";
@@ -18,10 +19,21 @@ import {
   normalizeDateValue,
   timeValueToMinutes,
 } from "@/lib/format";
+import {
+  getDayOfWeekFromDate,
+  mergeWeeklySchedulesWithDefaults,
+} from "@/lib/availability";
+import {
+  listDayOverridesByBarber,
+  listWeeklySchedulesByBarber,
+  upsertDayOverrideForBarber,
+} from "@/lib/barber-availability";
 import type {
   AppointmentRow,
+  BarberDayOverrideRow,
   BarberRow,
   BarberServiceRow,
+  BarberWeeklyScheduleRow,
 } from "@/lib/supabase";
 import { createWhatsAppConfirmationLink } from "@/lib/whatsapp";
 import { Select } from "@/components/ui";
@@ -42,7 +54,7 @@ type AppointmentFilter =
   | "deleted";
 
 const FILTER_OPTIONS: Array<{ value: AppointmentFilter; label: string }> = [
-  { value: "day", label: "Día" },
+  { value: "day", label: "Dia" },
   { value: "all", label: "Todos" },
   { value: "pending", label: "Pendientes" },
   { value: "confirmed", label: "Confirmados" },
@@ -54,6 +66,12 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [barbers, setBarbers] = useState<BarberRow[]>([]);
   const [services, setServices] = useState<BarberServiceRow[]>([]);
+  const [weeklySchedulesByBarber, setWeeklySchedulesByBarber] = useState<
+    Record<string, BarberWeeklyScheduleRow[]>
+  >({});
+  const [dayOverridesByBarber, setDayOverridesByBarber] = useState<
+    Record<string, BarberDayOverrideRow | null>
+  >({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [focusDate, setFocusDate] = useState(getTodayYmd());
@@ -72,6 +90,13 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   const [restoringAppointmentId, setRestoringAppointmentId] = useState<
     string | null
   >(null);
+  const [updatingDurationAppointmentId, setUpdatingDurationAppointmentId] =
+    useState<string | null>(null);
+  const [updatingDayOverrideBarberId, setUpdatingDayOverrideBarberId] =
+    useState<string | null>(null);
+  const [isOptimizationExpanded, setIsOptimizationExpanded] = useState(true);
+  const [acceptedOvertimeByAppointmentId, setAcceptedOvertimeByAppointmentId] =
+    useState<Record<string, number>>({});
 
   const matchesBarber = useMemo(() => {
     return (a: AppointmentRow) =>
@@ -114,7 +139,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     const base = appointments.filter((a) => {
       if (!matchesBarber(a)) return false;
 
-      // Búsqueda: si hay query, ignoramos filtro de día/estado pero
+      // BÃƒÆ’Ã‚Âºsqueda: si hay query, ignoramos filtro de dÃƒÆ’Ã‚Â­a/estado pero
       // seguimos respetando barbero y excluimos eliminados.
       if (isSearching) {
         if (a.status === "deleted") return false;
@@ -152,6 +177,81 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     normalizedQuery,
   ]);
 
+  const scheduleProjectionByAppointmentId = useMemo(() => {
+    const projections = new Map<
+      string,
+      {
+        effectiveDurationMinutes: number;
+        estimatedStartMinutes: number;
+        estimatedEndMinutes: number;
+        delayMinutes: number;
+      }
+    >();
+
+    const activeAppointments = appointments
+      .filter(
+        (appointment) =>
+          appointment.status === "pending" || appointment.status === "confirmed",
+      )
+      .sort((firstAppointment, secondAppointment) => {
+        const firstDate = normalizeDateValue(firstAppointment.appointment_date);
+        const secondDate = normalizeDateValue(secondAppointment.appointment_date);
+        const byBarber = firstAppointment.barber_id.localeCompare(
+          secondAppointment.barber_id,
+        );
+
+        if (firstDate !== secondDate) {
+          return firstDate.localeCompare(secondDate);
+        }
+
+        if (byBarber !== 0) {
+          return byBarber;
+        }
+
+        return (
+          timeValueToMinutes(firstAppointment.appointment_time) -
+          timeValueToMinutes(secondAppointment.appointment_time)
+        );
+      });
+
+    const lastEndByBarberAndDate = new Map<string, number>();
+
+    activeAppointments.forEach((appointment) => {
+      if (!appointment.id) {
+        return;
+      }
+
+      const date = normalizeDateValue(appointment.appointment_date);
+      const chainKey = `${appointment.barber_id}:${date}`;
+      const reservedStartMinutes = timeValueToMinutes(appointment.appointment_time);
+      const previousEstimatedEndMinutes =
+        lastEndByBarberAndDate.get(chainKey) ?? reservedStartMinutes;
+      const effectiveDurationMinutes =
+        appointment.actual_duration_minutes ?? appointment.service_duration_minutes;
+      const estimatedStartMinutes = Math.max(
+        reservedStartMinutes,
+        previousEstimatedEndMinutes,
+      );
+      const estimatedEndMinutes =
+        estimatedStartMinutes + effectiveDurationMinutes;
+      const delayMinutes = Math.max(
+        0,
+        estimatedStartMinutes - reservedStartMinutes,
+      );
+
+      projections.set(appointment.id, {
+        effectiveDurationMinutes,
+        estimatedStartMinutes,
+        estimatedEndMinutes,
+        delayMinutes,
+      });
+
+      lastEndByBarberAndDate.set(chainKey, estimatedEndMinutes);
+    });
+
+    return projections;
+  }, [appointments]);
+
   const filterCounts: Record<AppointmentFilter, number> = useMemo(
     () => ({
       day: focusDateAppointments.length,
@@ -166,8 +266,8 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     [focusDateAppointments, visibleAppointments, deletedAppointments],
   );
 
-  // Mapa barberId → duración mínima de sus servicios activos.
-  // Usado para calcular cuántos cortes posibles caben en un gap.
+  // Mapa barberId ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ duraciÃƒÆ’Ã‚Â³n mÃƒÆ’Ã‚Â­nima de sus servicios activos.
+  // Usado para calcular cuÃƒÆ’Ã‚Â¡ntos cortes posibles caben en un gap.
   const minDurationByBarber = useMemo(() => {
     const map = new Map<string, number>();
     services.forEach((s) => {
@@ -198,6 +298,190 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       [],
     );
   }, [barbers, appointments]);
+
+  const dayOptimizationAlerts = useMemo(() => {
+    const activeFocusDateAppointments = focusDateAppointments
+      .filter(
+        (appointment) =>
+          appointment.status === "pending" || appointment.status === "confirmed",
+      )
+      .sort(
+        (firstAppointment, secondAppointment) =>
+          timeValueToMinutes(firstAppointment.appointment_time) -
+          timeValueToMinutes(secondAppointment.appointment_time),
+      );
+
+    if (activeFocusDateAppointments.length === 0) {
+      return [];
+    }
+
+    const appointmentsByBarber = new Map<string, AppointmentRow[]>();
+
+    activeFocusDateAppointments.forEach((appointment) => {
+      const currentAppointments =
+        appointmentsByBarber.get(appointment.barber_id) ?? [];
+      currentAppointments.push(appointment);
+      appointmentsByBarber.set(appointment.barber_id, currentAppointments);
+    });
+
+    return Array.from(appointmentsByBarber.entries())
+      .map(([barberId, barberAppointments]) => {
+        const barber =
+          barbers.find((currentBarber) => currentBarber.id === barberId) ?? null;
+        const barberName =
+          barber?.display_name?.trim() || barber?.name || barberAppointments[0]?.barber_name;
+        const baseDurationMinutes = minDurationByBarber.get(barberId) ?? 30;
+        const daySchedule = getBarberDaySchedule({
+          barberId,
+          date: focusDate,
+          weeklySchedulesByBarber,
+          dayOverridesByBarber,
+          workingHours: barbershop.workingHours,
+          focusDate,
+        });
+
+        if (!daySchedule?.isWorking) {
+          return null;
+        }
+
+        const hasManualDayOverride = Boolean(dayOverridesByBarber[barberId]);
+
+        const dayStartMinutes = timeValueToMinutes(daySchedule.startTime);
+        const dayEndMinutes = timeValueToMinutes(daySchedule.endTime);
+        const projectedAppointments = barberAppointments
+          .map((appointment) => {
+            if (!appointment.id) {
+              return null;
+            }
+
+            const projection =
+              scheduleProjectionByAppointmentId.get(appointment.id) ?? null;
+
+            if (!projection) {
+              return null;
+            }
+
+            return {
+              appointment,
+              projection,
+            };
+          })
+          .filter(
+            (
+              projectedAppointment,
+            ): projectedAppointment is NonNullable<typeof projectedAppointment> =>
+              projectedAppointment !== null,
+          );
+
+        if (projectedAppointments.length === 0) {
+          return null;
+        }
+
+        const latestEstimatedEndMinutes = projectedAppointments.reduce(
+          (latestMinutes, projectedAppointment) =>
+            Math.max(
+              latestMinutes,
+              projectedAppointment.projection.estimatedEndMinutes,
+            ),
+          dayStartMinutes,
+        );
+
+        const overflowMinutes = Math.max(0, latestEstimatedEndMinutes - dayEndMinutes);
+        const lastPotentialSlotStartMinutes = Math.max(
+          dayStartMinutes,
+          dayEndMinutes - baseDurationMinutes,
+        );
+        const losesLastSlot =
+          latestEstimatedEndMinutes > lastPotentialSlotStartMinutes &&
+          latestEstimatedEndMinutes < dayEndMinutes;
+        const lostCuts = losesLastSlot ? 1 : 0;
+        const extensionMinutes =
+          overflowMinutes > 0
+            ? overflowMinutes
+            : !hasManualDayOverride && losesLastSlot
+              ? Math.max(
+                  0,
+                  latestEstimatedEndMinutes +
+                    baseDurationMinutes -
+                    dayEndMinutes,
+                )
+              : 0;
+
+        if (overflowMinutes === 0 && (hasManualDayOverride || lostCuts === 0)) {
+          return null;
+        }
+
+        return {
+          barberId,
+          barberName,
+          dayLabel: formatDayCompact(focusDate),
+          closingTime: normalizeTimeShort(daySchedule.endTime),
+          latestEstimatedEndTime: formatMinutesToTime(latestEstimatedEndMinutes),
+          lostCuts,
+          overflowMinutes,
+          lastPotentialSlotTime: formatMinutesToTime(lastPotentialSlotStartMinutes),
+          extensionMinutes,
+          currentClosingTime: normalizeTimeShort(daySchedule.endTime),
+          nextClosingTime: formatMinutesToTime(dayEndMinutes + extensionMinutes),
+        };
+      })
+      .filter((alert): alert is NonNullable<typeof alert> => alert !== null);
+  }, [
+    barbers,
+    barbershop.workingHours,
+    focusDate,
+    focusDateAppointments,
+    minDurationByBarber,
+    scheduleProjectionByAppointmentId,
+    dayOverridesByBarber,
+    weeklySchedulesByBarber,
+  ]);
+
+  const resolvedDayOverrideSummaries = useMemo(() => {
+    return Object.entries(dayOverridesByBarber)
+      .filter(([, override]) => override !== null)
+      .filter(([barberId]) => selectedBarberFilter === "all" || barberId === selectedBarberFilter)
+      .map(([barberId, override]) => {
+        if (!override) {
+          return null;
+        }
+
+        const barber =
+          barbers.find((currentBarber) => currentBarber.id === barberId) ?? null;
+        const barberName = barber?.display_name?.trim() || barber?.name || "Barbero";
+        const weeklySchedules = weeklySchedulesByBarber[barberId] ?? [];
+        const mergedSchedules = mergeWeeklySchedulesWithDefaults(
+          weeklySchedules,
+          barbershop.workingHours,
+        );
+        const weeklySchedule = mergedSchedules.find(
+          (schedule) => schedule.dayOfWeek === getDayOfWeekFromDate(focusDate),
+        );
+
+        if (!weeklySchedule) {
+          return null;
+        }
+
+        return {
+          barberId,
+          barberName,
+          dayLabel: formatDayCompact(focusDate),
+          baseClosingTime: weeklySchedule.endTime,
+          overrideClosingTime: normalizeTimeShort(override.end_time),
+        };
+      })
+      .filter((summary): summary is NonNullable<typeof summary> => summary !== null);
+  }, [
+    barbers,
+    barbershop.workingHours,
+    dayOverridesByBarber,
+    focusDate,
+    selectedBarberFilter,
+    weeklySchedulesByBarber,
+  ]);
+
+  const hasOptimizationSection =
+    dayOptimizationAlerts.length > 0 || resolvedDayOverrideSummaries.length > 0;
 
   async function handleConfirmAppointment(appointment: AppointmentRow) {
     if (!appointment.id) {
@@ -247,7 +531,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       return;
     }
     const ok = window.confirm(
-      `¿Cancelar el turno de ${appointment.customer_name} del ${formatDateForDisplay(
+      `Cancelar el turno de ${appointment.customer_name} del ${formatDateForDisplay(
         appointment.appointment_date,
       )} a las ${normalizeTimeShort(appointment.appointment_time)}?`,
     );
@@ -278,7 +562,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       return;
     }
     const ok = window.confirm(
-      `¿Eliminar visualmente el turno cancelado de ${appointment.customer_name}?`,
+      `Eliminar visualmente el turno cancelado de ${appointment.customer_name}?`,
     );
     if (!ok) return;
     setErrorMessage("");
@@ -326,6 +610,110 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     }
   }
 
+  async function handleAdjustActualDuration(
+    appointment: AppointmentRow,
+    nextDurationMinutes: number | null,
+  ) {
+    if (!appointment.id) {
+      setErrorMessage("No pudimos identificar la reserva.");
+      return;
+    }
+
+    setErrorMessage("");
+    setUpdatingDurationAppointmentId(appointment.id);
+
+    try {
+      const { data, error } = await updateAppointmentActualDuration(
+        appointment.id,
+        nextDurationMinutes,
+      );
+
+      if (error || !data) {
+        setErrorMessage("No pudimos actualizar la duracion real.");
+        return;
+      }
+
+      setAppointments((currentAppointments) =>
+        currentAppointments.map((currentAppointment) =>
+          currentAppointment.id === appointment.id ? data : currentAppointment,
+        ),
+      );
+    } catch {
+      setErrorMessage("No pudimos actualizar la duracion real.");
+    } finally {
+      setUpdatingDurationAppointmentId(null);
+    }
+  }
+
+  async function handleExtendClosingForDay(
+    barberId: string,
+    extensionMinutes: number,
+  ) {
+    if (extensionMinutes <= 0) {
+      return;
+    }
+
+    const weeklySchedules = weeklySchedulesByBarber[barberId] ?? [];
+    const dayOverride = dayOverridesByBarber[barberId] ?? null;
+    const mergedSchedules = mergeWeeklySchedulesWithDefaults(
+      weeklySchedules,
+      barbershop.workingHours,
+    );
+    const weeklySchedule = mergedSchedules.find(
+      (schedule) => schedule.dayOfWeek === getDayOfWeekFromDate(focusDate),
+    );
+
+    const baseSchedule = dayOverride
+      ? {
+          startTime: normalizeTimeShort(dayOverride.start_time),
+          endTime: normalizeTimeShort(dayOverride.end_time),
+          isWorking: dayOverride.is_working,
+        }
+      : weeklySchedule
+        ? {
+            startTime: weeklySchedule.startTime,
+            endTime: weeklySchedule.endTime,
+            isWorking: weeklySchedule.isWorking,
+          }
+        : null;
+
+    if (!baseSchedule?.isWorking) {
+      setErrorMessage("No pudimos extender el cierre para ese dia.");
+      return;
+    }
+
+    setErrorMessage("");
+    setUpdatingDayOverrideBarberId(barberId);
+
+    try {
+      const nextEndMinutes =
+        timeValueToMinutes(baseSchedule.endTime) + extensionMinutes;
+      const { data, error } = await upsertDayOverrideForBarber({
+        barbershopSlug: barbershop.slug,
+        barberId,
+        overrideDate: focusDate,
+        startTime: baseSchedule.startTime,
+        endTime: formatMinutesToTime(nextEndMinutes),
+        isWorking: true,
+      });
+
+      if (error || !data) {
+        setErrorMessage("No pudimos extender el cierre para ese dia.");
+        return;
+      }
+
+      setDayOverridesByBarber((currentOverrides) => ({
+        ...currentOverrides,
+        [barberId]: data,
+      }));
+      setIsOptimizationExpanded(false);
+    } catch {
+      setErrorMessage("No pudimos extender el cierre para ese dia.");
+    } finally {
+      setUpdatingDayOverrideBarberId(null);
+    }
+  }
+
   useEffect(() => {
     let isMounted = true;
     async function load() {
@@ -343,15 +731,29 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
           setAppointments([]);
           return;
         }
+        const currentBarbers = barbersResult.data ?? [];
+        const weeklyScheduleEntries = await Promise.all(
+          currentBarbers.map(async (barber) => {
+            const { data } = await listWeeklySchedulesByBarber({
+              barbershopSlug: barbershop.slug,
+              barberId: barber.id,
+            });
+
+            return [barber.id, data ?? []] as const;
+          }),
+        );
+        if (!isMounted) return;
         setAppointments(appsResult.data ?? []);
-        setBarbers(barbersResult.data ?? []);
+        setBarbers(currentBarbers);
         setServices(servicesResult.data ?? []);
+        setWeeklySchedulesByBarber(Object.fromEntries(weeklyScheduleEntries));
       } catch {
         if (isMounted) {
           setErrorMessage("No pudimos cargar las reservas.");
           setAppointments([]);
           setBarbers([]);
           setServices([]);
+          setWeeklySchedulesByBarber({});
         }
       } finally {
         if (isMounted) setIsLoading(false);
@@ -362,6 +764,46 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       isMounted = false;
     };
   }, [barbershop.slug]);
+
+  useEffect(() => {
+    if (barbers.length === 0) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadDayOverrides() {
+      try {
+        const dayOverrideEntries = await Promise.all(
+          barbers.map(async (barber) => {
+            const { data } = await listDayOverridesByBarber({
+              barbershopSlug: barbershop.slug,
+              barberId: barber.id,
+              overrideDate: focusDate,
+            });
+
+            return [barber.id, data?.[0] ?? null] as const;
+          }),
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setDayOverridesByBarber(Object.fromEntries(dayOverrideEntries));
+      } catch {
+        if (isMounted) {
+          setDayOverridesByBarber({});
+        }
+      }
+    }
+
+    loadDayOverrides();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [barbers, barbershop.slug, focusDate]);
 
   const activeFilterLabel =
     FILTER_OPTIONS.find((o) => o.value === activeFilter)?.label.toLowerCase() ??
@@ -378,14 +820,14 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
             Agenda de {barbershop.name}
           </h1>
           <p className="mt-3 max-w-xl text-sm text-[color:var(--text-secondary)] sm:text-base">
-            Gestioná las reservas del día. Confirmar y enviar WhatsApp son
+            Gestiona las reservas del dia. Confirmar y enviar WhatsApp son
             acciones separadas.
           </p>
         </header>
 
         {isLoading ? (
           <div className="rounded-[var(--radius-sm)] border border-[color:var(--border-subtle)] p-6 text-sm text-[color:var(--text-secondary)]">
-            Cargando reservas…
+            Cargando reservas...
           </div>
         ) : null}
 
@@ -412,6 +854,86 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
               />
             </div>
 
+            {hasOptimizationSection ? (
+              <section className="mb-6 rounded-[var(--radius-sm)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)]">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIsOptimizationExpanded((currentValue) => !currentValue)
+                  }
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                >
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--brand-gold)]">
+                      Aprovechamiento del horario
+                    </p>
+                    <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                      {dayOptimizationAlerts.length > 0
+                        ? `${dayOptimizationAlerts.length} ajuste${dayOptimizationAlerts.length === 1 ? "" : "s"} sugerido${dayOptimizationAlerts.length === 1 ? "" : "s"} para ${formatDayCompact(focusDate)}`
+                        : resolvedDayOverrideSummaries
+                            .map(
+                              (summary) =>
+                                `${summary.barberName}: cierre ${summary.overrideClosingTime}`,
+                            )
+                            .join(" - ")}
+                    </p>
+                  </div>
+                  {isOptimizationExpanded ? (
+                    <ChevronDown
+                      className="size-4 text-[color:var(--text-subtle)]"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <ChevronRight
+                      className="size-4 text-[color:var(--text-subtle)]"
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+
+                {isOptimizationExpanded ? (
+                  <div className="grid gap-3 border-t border-[color:var(--border-subtle)] px-4 py-4">
+                    {dayOptimizationAlerts.map((alert) => (
+                      <DayOptimizationAlertCard
+                        key={`${alert.barberId}-${focusDate}`}
+                        barberName={alert.barberName}
+                        dayLabel={alert.dayLabel}
+                        closingTime={alert.closingTime}
+                        latestEstimatedEndTime={alert.latestEstimatedEndTime}
+                        lostCuts={alert.lostCuts}
+                        overflowMinutes={alert.overflowMinutes}
+                        lastPotentialSlotTime={alert.lastPotentialSlotTime}
+                        extensionMinutes={alert.extensionMinutes}
+                        currentClosingTime={alert.currentClosingTime}
+                        nextClosingTime={alert.nextClosingTime}
+                        isRecovering={
+                          updatingDayOverrideBarberId === alert.barberId
+                        }
+                        onExtendClosing={() =>
+                          handleExtendClosingForDay(
+                            alert.barberId,
+                            alert.extensionMinutes,
+                          )
+                        }
+                      />
+                    ))}
+
+                    {dayOptimizationAlerts.length === 0
+                      ? resolvedDayOverrideSummaries.map((summary) => (
+                          <ResolvedDayOverrideSummaryCard
+                            key={`${summary.barberId}-${focusDate}`}
+                            barberName={summary.barberName}
+                            dayLabel={summary.dayLabel}
+                            baseClosingTime={summary.baseClosingTime}
+                            overrideClosingTime={summary.overrideClosingTime}
+                          />
+                        ))
+                      : null}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
             {/* Buscador + filtro barbero */}
             <div className="mb-4 space-y-3">
               <div
@@ -431,7 +953,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                     type="search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar cliente por nombre o teléfono…"
+                    placeholder="Buscar cliente por nombre o telefono..."
                     aria-label="Buscar cliente"
                     className="h-11 w-full appearance-none rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-[color:var(--surface-0)] pl-9 pr-9 text-sm text-white placeholder:text-[color:var(--text-subtle)] focus:border-[color:var(--brand-gold)] focus:outline-none [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
                   />
@@ -439,7 +961,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                     <button
                       type="button"
                       onClick={() => setSearchQuery("")}
-                      aria-label="Limpiar búsqueda"
+                      aria-label="Limpiar busqueda"
                       className="absolute right-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-[var(--radius-xs)] text-[color:var(--text-subtle)] transition-colors duration-[var(--duration-fast)] hover:text-white"
                     >
                       <X className="size-3.5" />
@@ -464,7 +986,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                 ) : null}
               </div>
 
-              {/* Chips de estado: ocultos durante búsqueda */}
+              {/* Chips de estado: ocultos durante busqueda */}
               {!isSearching ? (
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {FILTER_OPTIONS.map((opt) => {
@@ -498,7 +1020,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                 </div>
               ) : (
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
-                  Resultados de búsqueda · {filteredAppointments.length}
+                  Resultados de busqueda - {filteredAppointments.length}
                 </p>
               )}
             </div>
@@ -506,8 +1028,8 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
             {/* Lista de turnos */}
             {appointments.length === 0 ? (
               <EmptyState
-                title="Sin reservas todavía"
-                description="Cuando alguien reserve por la página pública, aparecerá acá."
+                title="Sin reservas todavia"
+                description="Cuando alguien reserve por la pagina publica, aparecera aca."
               />
             ) : filteredAppointments.length === 0 ? (
               <EmptyState
@@ -521,6 +1043,42 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
             ) : (
               <ul className="grid gap-3">
                 {filteredAppointments.flatMap((appointment, index, arr) => {
+                  const appointmentDate = normalizeDateValue(
+                    appointment.appointment_date,
+                  );
+                  const hasNextActiveAppointment = arr
+                    .slice(index + 1)
+                    .some(
+                      (nextAppointment) =>
+                        nextAppointment.barber_id === appointment.barber_id &&
+                        normalizeDateValue(nextAppointment.appointment_date) ===
+                          appointmentDate &&
+                        (nextAppointment.status === "pending" ||
+                          nextAppointment.status === "confirmed"),
+                    );
+                  const daySchedule = getBarberDaySchedule({
+                    barberId: appointment.barber_id,
+                    date: appointmentDate,
+                    weeklySchedulesByBarber,
+                    dayOverridesByBarber,
+                    workingHours: barbershop.workingHours,
+                    focusDate,
+                  });
+                  const scheduleProjection = appointment.id
+                    ? scheduleProjectionByAppointmentId.get(appointment.id)
+                    : undefined;
+                  const dayClosingMinutes =
+                    daySchedule?.isWorking
+                      ? timeValueToMinutes(daySchedule.endTime)
+                      : undefined;
+                  const overtimeMinutes =
+                    dayClosingMinutes !== undefined && scheduleProjection
+                      ? Math.max(
+                          0,
+                          scheduleProjection.estimatedEndMinutes -
+                            dayClosingMinutes,
+                        )
+                      : 0;
                   const nodes: React.ReactNode[] = [
                     <AppointmentCard
                       key={
@@ -537,15 +1095,37 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       cancellingId={cancellingAppointmentId}
                       restoringId={restoringAppointmentId}
                       deletingId={deletingAppointmentId}
+                      updatingDurationId={updatingDurationAppointmentId}
+                      onAdjustActualDuration={handleAdjustActualDuration}
+                      scheduleProjection={scheduleProjection}
+                      dayClosingMinutes={dayClosingMinutes}
+                      hasNextActiveAppointment={hasNextActiveAppointment}
+                      overtimeAccepted={
+                        Boolean(appointment.id) &&
+                        acceptedOvertimeByAppointmentId[appointment.id ?? ""] ===
+                          overtimeMinutes &&
+                        overtimeMinutes > 0
+                      }
+                      onAcceptOvertime={
+                        appointment.id && overtimeMinutes > 0
+                          ? () =>
+                              setAcceptedOvertimeByAppointmentId(
+                                (currentAcceptedState) => ({
+                                  ...currentAcceptedState,
+                                  [appointment.id ?? ""]: overtimeMinutes,
+                                }),
+                              )
+                          : undefined
+                      }
                       showDate={isSearching || activeFilter === "all"}
                     />,
                   ];
 
-                  // Gap marker entre turnos consecutivos activos del mismo día.
-                  // Solo tiene sentido cuando el filtro es "Día" (ver un solo día)
-                  // y ambos turnos están activos (pending/confirmed).
-                  // Durante búsqueda no aplicamos gap markers (los resultados
-                  // pueden ser de distintos días).
+                  // Gap marker entre turnos consecutivos activos del mismo dÃƒÆ’Ã‚Â­a.
+                  // Solo tiene sentido cuando el filtro es "DÃƒÆ’Ã‚Â­a" (ver un solo dÃƒÆ’Ã‚Â­a)
+                  // y ambos turnos estÃƒÆ’Ã‚Â¡n activos (pending/confirmed).
+                  // Durante bÃƒÆ’Ã‚Âºsqueda no aplicamos gap markers (los resultados
+                  // pueden ser de distintos dÃƒÆ’Ã‚Â­as).
                   if (
                     !isSearching &&
                     activeFilter === "day" &&
@@ -559,17 +1139,23 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       next.status === "pending" || next.status === "confirmed";
 
                     if (currentActive && nextActive) {
+                      const currentProjection = appointment.id
+                        ? scheduleProjectionByAppointmentId.get(appointment.id)
+                        : undefined;
                       const currentEnd =
-                        timeValueToMinutes(appointment.appointment_time) +
-                        (appointment.service_duration_minutes ?? 0);
+                        currentProjection?.estimatedEndMinutes ??
+                        (timeValueToMinutes(appointment.appointment_time) +
+                          (appointment.actual_duration_minutes ??
+                            appointment.service_duration_minutes ??
+                            0));
                       const nextStart = timeValueToMinutes(next.appointment_time);
                       const gap = nextStart - currentEnd;
 
                       if (gap > 0) {
-                        // Capacidad estimada según servicios activos de cada
+                        // Capacidad estimada segÃƒÆ’Ã‚Âºn servicios activos de cada
                         // barbero. Si los dos barberos del gap tienen MISMA
-                        // duración mínima (o son el mismo), mostramos un solo
-                        // número. Si difieren, desglosamos por barbero.
+                        // duraciÃƒÆ’Ã‚Â³n mÃƒÆ’Ã‚Â­nima (o son el mismo), mostramos un solo
+                        // nÃƒÆ’Ã‚Âºmero. Si difieren, desglosamos por barbero.
                         const prevMin = minDurationByBarber.get(
                           appointment.barber_id,
                         );
@@ -647,6 +1233,160 @@ function EmptyState({
   );
 }
 
+function formatDayCompact(dateValue: string) {
+  const date = new Date(`${normalizeDateValue(dateValue)}T12:00:00`);
+  const label = new Intl.DateTimeFormat("es-AR", {
+    weekday: "long",
+    day: "numeric",
+  }).format(date);
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function getBarberDaySchedule(params: {
+  barberId: string;
+  date: string;
+  weeklySchedulesByBarber: Record<string, BarberWeeklyScheduleRow[]>;
+  dayOverridesByBarber: Record<string, BarberDayOverrideRow | null>;
+  workingHours: DemoBarbershop["workingHours"];
+  focusDate: string;
+}) {
+  const {
+    barberId,
+    date,
+    weeklySchedulesByBarber,
+    dayOverridesByBarber,
+    workingHours,
+    focusDate,
+  } = params;
+  const weeklySchedules = weeklySchedulesByBarber[barberId] ?? [];
+  const mergedSchedules = mergeWeeklySchedulesWithDefaults(
+    weeklySchedules,
+    workingHours,
+  );
+  const weeklySchedule = mergedSchedules.find(
+    (schedule) => schedule.dayOfWeek === getDayOfWeekFromDate(date),
+  );
+  const dayOverride =
+    normalizeDateValue(date) === focusDate
+      ? dayOverridesByBarber[barberId] ?? null
+      : null;
+
+  if (dayOverride) {
+    return {
+      startTime: normalizeTimeShort(dayOverride.start_time),
+      endTime: normalizeTimeShort(dayOverride.end_time),
+      isWorking: dayOverride.is_working,
+    };
+  }
+
+  if (!weeklySchedule) {
+    return null;
+  }
+
+  return {
+    startTime: weeklySchedule.startTime,
+    endTime: weeklySchedule.endTime,
+    isWorking: weeklySchedule.isWorking,
+  };
+}
+
+function DayOptimizationAlertCard({
+  barberName,
+  dayLabel,
+  closingTime,
+  latestEstimatedEndTime,
+  lostCuts,
+  overflowMinutes,
+  lastPotentialSlotTime,
+  extensionMinutes,
+  currentClosingTime,
+  nextClosingTime,
+  isRecovering,
+  onExtendClosing,
+}: {
+  barberName: string;
+  dayLabel: string;
+  closingTime: string;
+  latestEstimatedEndTime: string;
+  lostCuts: number;
+  overflowMinutes: number;
+  lastPotentialSlotTime: string;
+  extensionMinutes: number;
+  currentClosingTime: string;
+  nextClosingTime: string;
+  isRecovering: boolean;
+  onExtendClosing: () => void;
+}) {
+  const isOverflowing = overflowMinutes > 0;
+  const canExtendClosing = extensionMinutes > 0;
+
+  return (
+    <article
+      className={cn(
+        "rounded-[var(--radius-sm)] border px-4 py-3",
+        isOverflowing
+          ? "border-[color:var(--danger)]/40 bg-[color:var(--danger-soft)]/30"
+          : "border-[color:var(--brand-gold)]/30 bg-[color:var(--brand-gold)]/8",
+      )}
+    >
+      <p className="text-sm font-bold text-white">
+        {barberName} - {dayLabel}
+      </p>
+
+      <p className="mt-2 text-sm leading-6 text-[color:var(--text-secondary)]">
+        {isOverflowing
+          ? `Si cerras a las ${closingTime}, el ultimo turno termina a las ${latestEstimatedEndTime} y te pasas ${overflowMinutes} min.`
+          : `Si cerras a las ${closingTime}, desaprovechas ${lostCuts === 1 ? "un corte" : `${lostCuts} cortes`} ${lostCuts === 1 ? `a las ${lastPotentialSlotTime}` : ""}, porque el ultimo turno termina a las ${latestEstimatedEndTime}.`}
+      </p>
+
+      {canExtendClosing ? (
+        <button
+          type="button"
+          onClick={onExtendClosing}
+          disabled={isRecovering}
+          className="mt-3 inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[color:var(--brand-gold)]/30 px-4 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--brand-gold)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold)]/10 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isRecovering
+            ? "Guardando..."
+            : `Extender cierre a ${nextClosingTime}`}
+        </button>
+      ) : null}
+
+      {canExtendClosing ? (
+        <p className="mt-2 text-xs text-[color:var(--text-muted)]">
+          Esto ajusta el cierre de {dayLabel} solamente, de {currentClosingTime} a{" "}
+          {nextClosingTime}.
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+function ResolvedDayOverrideSummaryCard({
+  barberName,
+  dayLabel,
+  baseClosingTime,
+  overrideClosingTime,
+}: {
+  barberName: string;
+  dayLabel: string;
+  baseClosingTime: string;
+  overrideClosingTime: string;
+}) {
+  return (
+    <article className="rounded-[var(--radius-sm)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-0)]/60 px-4 py-3">
+      <p className="text-sm font-bold text-white">
+        {barberName} - {dayLabel}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-[color:var(--text-secondary)]">
+        El cierre de este dia quedo extendido de {baseClosingTime} a{" "}
+        {overrideClosingTime}.
+      </p>
+    </article>
+  );
+}
+
 function formatMinutesToTime(totalMinutes: number) {
   const hours = Math.floor(totalMinutes / 60)
     .toString()
@@ -673,7 +1413,7 @@ function GapMarker({
   startMinutes: number;
   endMinutes: number;
   minutes: number;
-  /** Cortes que entrarían en el hueco si solo importa la capacidad global. */
+  /** Cortes que entrarÃƒÆ’Ã‚Â­an en el hueco si solo importa la capacidad global. */
   possibleCuts: number;
   /** Si los barberos del gap tienen duraciones distintas, breakdown por barbero. */
   perBarber: Array<{ name: string; cuts: number }> | null;
@@ -695,7 +1435,7 @@ function GapMarker({
       <span className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-subtle)]">
         <span className="font-mono tabular-nums">
           {formatMinutesToTime(startMinutes)}
-          <span className="mx-1 text-[color:var(--text-subtle)]">→</span>
+          <span className="mx-1 text-[color:var(--text-subtle)]">-&gt;</span>
           {formatMinutesToTime(endMinutes)}
         </span>
         {perBarber ? (
@@ -708,13 +1448,13 @@ function GapMarker({
                 {b.name}: {b.cuts}
               </span>
             ))}
-            <span className="mx-1 text-[color:var(--text-subtle)]">·</span>
+            <span className="mx-1 text-[color:var(--text-subtle)]">-</span>
             {formatGapDuration(minutes)} libres
           </span>
         ) : possibleCuts > 0 ? (
           <span className="text-[color:var(--brand-gold)]">
             {possibleCuts} {possibleCuts === 1 ? "corte" : "cortes"} posibles
-            <span className="mx-1 text-[color:var(--text-subtle)]">·</span>
+            <span className="mx-1 text-[color:var(--text-subtle)]">-</span>
             {formatGapDuration(minutes)} libres
           </span>
         ) : (
@@ -727,3 +1467,4 @@ function GapMarker({
     </li>
   );
 }
+
