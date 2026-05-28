@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from "react";
 import { CheckCircle2, MessageCircle } from "lucide-react";
-import { createContactRequest } from "@/lib/contact-requests";
 
 export function HomeContact() {
   const [name, setName] = useState("");
@@ -38,16 +37,24 @@ export function HomeContact() {
     setErrorMessage("");
     setIsSubmitting(true);
     try {
-      const { error } = await createContactRequest({
-        name: trimmedName,
-        email: trimmedEmail || null,
-        phone: trimmedPhone || null,
-        message: trimmedMessage,
-        source: "home",
+      const response = await fetch("/api/contact-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          email: trimmedEmail || null,
+          phone: trimmedPhone || null,
+          message: trimmedMessage,
+          source: "home",
+        }),
       });
-      if (error) {
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
         setErrorMessage(
-          "No pudimos enviar tu mensaje. Probá de nuevo o escribinos por WhatsApp.",
+          payload.error ??
+            "No pudimos enviar tu mensaje. Probá de nuevo o escribinos por WhatsApp.",
         );
         return;
       }
