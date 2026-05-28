@@ -4,11 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
-import {
-  getStoragePathFromPublicUrl,
-  removeBarbershopLogo,
-  uploadBarbershopLogo,
-} from "@/lib/barbershop-logos";
+import { getCurrentSession } from "@/lib/auth";
 import { updateBarbershopSettings } from "@/lib/barbershops";
 
 type AdminSettingsFormProps = {
@@ -124,38 +120,31 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
     setIsUploadingLogo(true);
 
     try {
-      const previousPath = getStoragePathFromPublicUrl(logoUrl);
-      const { data: uploadResult, error: uploadError } =
-        await uploadBarbershopLogo({
-          barbershopSlug: barbershop.slug,
-          file,
-          previousPath,
-        });
-      if (uploadError || !uploadResult) {
-        setErrorMessage("No pudimos subir el logo. Probá con otra imagen.");
+      const { data: sessionData } = await getCurrentSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setErrorMessage("Tu sesión expiró, volvé a iniciar sesión.");
         return;
       }
-      const newPublicUrl = uploadResult.publicUrl;
-      const { error: updateError } = await updateBarbershopSettings({
-        slug: barbershop.slug,
-        values: {
-          name: name.trim(),
-          description: description?.trim() || null,
-          whatsapp: whatsapp?.trim() || null,
-          instagram: instagram?.trim() || null,
-          address: address?.trim() || null,
-          logo_url: newPublicUrl,
-          working_hours_start: startTime,
-          working_hours_end: endTime,
-          slot_interval_minutes: Number(slotIntervalMinutes),
-          is_active: isActive,
-        },
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("barbershopSlug", barbershop.slug);
+      if (logoUrl) formData.append("previousLogoUrl", logoUrl);
+
+      const response = await fetch("/api/admin/logo", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData,
       });
-      if (updateError) {
-        setErrorMessage("Subimos el logo pero falló guardar la URL.");
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setErrorMessage(payload.error ?? "No pudimos subir el logo.");
         return;
       }
-      setLogoUrl(newPublicUrl);
+      const payload = (await response.json()) as { logoUrl: string };
+      setLogoUrl(payload.logoUrl);
       setSuccessMessage("Logo actualizado.");
     } catch {
       setErrorMessage("No pudimos subir el logo.");
@@ -174,27 +163,25 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
     setIsRemovingLogo(true);
 
     try {
-      const storagePath = getStoragePathFromPublicUrl(logoUrl);
-      if (storagePath) {
-        await removeBarbershopLogo({ storagePath });
+      const { data: sessionData } = await getCurrentSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setErrorMessage("Tu sesión expiró, volvé a iniciar sesión.");
+        return;
       }
-      const { error: updateError } = await updateBarbershopSettings({
-        slug: barbershop.slug,
-        values: {
-          name: name.trim(),
-          description: description?.trim() || null,
-          whatsapp: whatsapp?.trim() || null,
-          instagram: instagram?.trim() || null,
-          address: address?.trim() || null,
-          logo_url: null,
-          working_hours_start: startTime,
-          working_hours_end: endTime,
-          slot_interval_minutes: Number(slotIntervalMinutes),
-          is_active: isActive,
-        },
+      const params = new URLSearchParams({
+        barbershopSlug: barbershop.slug,
+        currentLogoUrl: logoUrl,
       });
-      if (updateError) {
-        setErrorMessage("No pudimos quitar el logo.");
+      const response = await fetch(`/api/admin/logo?${params.toString()}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setErrorMessage(payload.error ?? "No pudimos quitar el logo.");
         return;
       }
       setLogoUrl(null);

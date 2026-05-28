@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   Plus,
+  Settings,
   Users,
   X,
 } from "lucide-react";
@@ -67,6 +68,11 @@ export function AdminSidebar({
       label: "Galería",
       href: `/${barbershopSlug}/admin/galeria`,
       icon: ImageIcon,
+    },
+    {
+      label: "Configuración",
+      href: `/${barbershopSlug}/admin/settings`,
+      icon: Settings,
     },
   ];
 

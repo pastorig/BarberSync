@@ -4,12 +4,9 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { ArrowDown, ArrowUp, ImagePlus, Trash2 } from "lucide-react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
+import { getCurrentSession } from "@/lib/auth";
 import {
-  hardDeleteGalleryPhoto,
   listGalleryPhotosByBarbershop,
-  updateGalleryPhotoCaption,
-  updateGalleryPhotoOrder,
-  uploadGalleryPhoto,
   type GalleryPhoto,
 } from "@/lib/barbershop-gallery";
 
@@ -54,6 +51,11 @@ export function AdminGalleryManager({ barbershop }: AdminGalleryManagerProps) {
     };
   }, [barbershop.slug]);
 
+  async function getAccessToken(): Promise<string | null> {
+    const { data } = await getCurrentSession();
+    return data.session?.access_token ?? null;
+  }
+
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     if (files.length === 0) return;
@@ -61,22 +63,40 @@ export function AdminGalleryManager({ barbershop }: AdminGalleryManagerProps) {
     setSuccessMessage("");
     setIsUploading(true);
 
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setErrorMessage("Tu sesión expiró, volvé a iniciar sesión.");
+      setIsUploading(false);
+      return;
+    }
+
     const maxOrder = photos.reduce((acc, p) => Math.max(acc, p.sort_order), 0);
     const newPhotos: GalleryPhoto[] = [];
 
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const { data, error } = await uploadGalleryPhoto({
-          barbershopSlug: barbershop.slug,
-          file,
-          sortOrder: maxOrder + i + 1,
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("barbershopSlug", barbershop.slug);
+        formData.append("sortOrder", String(maxOrder + i + 1));
+
+        const response = await fetch("/api/admin/gallery-photos", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: formData,
         });
-        if (error || !data) {
-          setErrorMessage(`No pudimos subir "${file.name}".`);
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          setErrorMessage(
+            payload.error ?? `No pudimos subir "${file.name}".`,
+          );
           continue;
         }
-        newPhotos.push(data);
+        const payload = (await response.json()) as { photo: GalleryPhoto };
+        newPhotos.push(payload.photo);
       }
       if (newPhotos.length > 0) {
         setPhotos((current) => [...current, ...newPhotos]);
@@ -99,12 +119,28 @@ export function AdminGalleryManager({ barbershop }: AdminGalleryManagerProps) {
     setErrorMessage("");
     setSuccessMessage("");
     try {
-      const { error } = await hardDeleteGalleryPhoto({
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setErrorMessage("Tu sesión expiró, volvé a iniciar sesión.");
+        return;
+      }
+      const params = new URLSearchParams({
         photoId: photo.id,
+        barbershopSlug: photo.barbershop_slug,
         storagePath: photo.storage_path,
       });
-      if (error) {
-        setErrorMessage("No pudimos eliminar la foto.");
+      const response = await fetch(
+        `/api/admin/gallery-photos?${params.toString()}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setErrorMessage(payload.error ?? "No pudimos eliminar la foto.");
         return;
       }
       setPhotos((current) => current.filter((p) => p.id !== photo.id));
@@ -114,6 +150,32 @@ export function AdminGalleryManager({ barbershop }: AdminGalleryManagerProps) {
     } finally {
       setBusyPhotoId(null);
     }
+  }
+
+  async function patchPhoto(
+    photoId: string,
+    body: { caption?: string | null; sortOrder?: number },
+  ) {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      throw new Error("session-expired");
+    }
+    const response = await fetch("/api/admin/gallery-photos", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        photoId,
+        barbershopSlug: barbershop.slug,
+        ...body,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error("patch-failed");
+    }
+    return (await response.json()) as { photo: GalleryPhoto };
   }
 
   async function handleMove(photo: GalleryPhoto, direction: -1 | 1) {
@@ -127,20 +189,10 @@ export function AdminGalleryManager({ barbershop }: AdminGalleryManagerProps) {
     setErrorMessage("");
 
     try {
-      const [a, b] = await Promise.all([
-        updateGalleryPhotoOrder({
-          photoId: photo.id,
-          sortOrder: swapTarget.sort_order,
-        }),
-        updateGalleryPhotoOrder({
-          photoId: swapTarget.id,
-          sortOrder: photo.sort_order,
-        }),
+      await Promise.all([
+        patchPhoto(photo.id, { sortOrder: swapTarget.sort_order }),
+        patchPhoto(swapTarget.id, { sortOrder: photo.sort_order }),
       ]);
-      if (a.error || b.error) {
-        setErrorMessage("No pudimos reordenar las fotos.");
-        return;
-      }
       setPhotos((current) =>
         current.map((p) => {
           if (p.id === photo.id) return { ...p, sort_order: swapTarget.sort_order };
@@ -167,10 +219,7 @@ export function AdminGalleryManager({ barbershop }: AdminGalleryManagerProps) {
       ),
     );
     try {
-      await updateGalleryPhotoCaption({
-        photoId: photo.id,
-        caption: trimmed || null,
-      });
+      await patchPhoto(photo.id, { caption: trimmed || null });
     } catch {
       // Si falla, no rollbackeamos por simplicidad; el next reload lo arregla.
     }
