@@ -135,8 +135,14 @@ export async function PATCH(request: Request) {
 
   if (updateError || !barbershop) {
     Sentry.captureException(updateError);
+    console.error("[barbershop-settings] update error", updateError);
     return NextResponse.json(
-      { error: "No pudimos guardar la configuración." },
+      {
+        error: "No pudimos guardar la configuración.",
+        debug: updateError?.message ?? "no barbershop returned",
+        code: updateError?.code ?? null,
+        details: updateError?.details ?? null,
+      },
       { status: 500 },
     );
   }
