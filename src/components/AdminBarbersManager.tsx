@@ -15,6 +15,7 @@ import {
   createBarber,
   deleteBarber,
   listBarbersByBarbershop,
+  setBarberAsOwner,
   toggleBarberActive,
   updateBarber,
 } from "@/lib/barbers";
@@ -160,6 +161,9 @@ export function AdminBarbersManager({ barbershop }: AdminBarbersManagerProps) {
     setIsCreating(true);
 
     try {
+      // Si todavía no hay ningún barbero cargado, el primero queda como
+      // "cabeza" por defecto. Después el admin puede cambiarla.
+      const shouldMarkAsOwner = barbers.length === 0;
       const { data, error } = await createBarber({
         barbershop_slug: barbershop.slug,
         name: name.trim(),
@@ -167,6 +171,7 @@ export function AdminBarbersManager({ barbershop }: AdminBarbersManagerProps) {
         role: role.trim() || null,
         whatsapp: whatsapp.trim() || null,
         is_active: true,
+        is_owner: shouldMarkAsOwner,
       });
 
       if (error || !data) {
@@ -208,6 +213,49 @@ export function AdminBarbersManager({ barbershop }: AdminBarbersManagerProps) {
       );
     } catch {
       setErrorMessage("No pudimos actualizar el estado del barbero.");
+    } finally {
+      setUpdatingBarberId(null);
+    }
+  }
+
+  async function handleSetAsOwner(barber: BarberRow) {
+    if (barber.is_owner) return;
+    const displayName = getDisplayName(barber);
+    const ok = window.confirm(
+      `¿Marcar a ${displayName} como cabeza de la barbería? Va a aparecer primero en la landing pública con borde dorado.`,
+    );
+    if (!ok) return;
+
+    setErrorMessage("");
+    setUpdatingBarberId(barber.id);
+
+    try {
+      const { data, error } = await setBarberAsOwner({
+        barberId: barber.id,
+        barbershopSlug: barbershop.slug,
+      });
+
+      if (error || !data) {
+        setErrorMessage("No pudimos marcar al barbero como cabeza.");
+        return;
+      }
+
+      // Sortear con owner primero, después por created_at ascendente.
+      setBarbers((currentBarbers) => {
+        const updated = currentBarbers.map((currentBarber) => {
+          if (currentBarber.id === barber.id) return data;
+          if (currentBarber.is_owner) {
+            return { ...currentBarber, is_owner: false };
+          }
+          return currentBarber;
+        });
+        return [...updated].sort((a, b) => {
+          if (a.is_owner !== b.is_owner) return a.is_owner ? -1 : 1;
+          return a.created_at.localeCompare(b.created_at);
+        });
+      });
+    } catch {
+      setErrorMessage("No pudimos marcar al barbero como cabeza.");
     } finally {
       setUpdatingBarberId(null);
     }
@@ -661,15 +709,31 @@ export function AdminBarbersManager({ barbershop }: AdminBarbersManagerProps) {
                         </p>
                       ) : null}
                     </div>
-                    <span
-                      className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${
-                        barber.is_active
-                          ? "border-[color:var(--success)]/40 bg-[color:var(--success-soft)] text-[color:var(--success)]"
-                          : "border-[color:var(--danger)]/40 bg-[color:var(--danger-soft)] text-[color:var(--danger)]"
-                      }`}
-                    >
-                      {barber.is_active ? "Activo" : "Inactivo"}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {barber.is_owner ? (
+                        <span className="rounded-md border border-[color:var(--brand-gold)]/40 bg-[color:var(--brand-gold-soft)] px-2 py-1 text-[10px] font-bold uppercase text-[color:var(--brand-gold)]">
+                          ★ Cabeza
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetAsOwner(barber)}
+                          disabled={updatingBarberId === barber.id}
+                          className="rounded-md border border-[color:var(--border-default)] px-2 py-1 text-[10px] font-bold uppercase text-[color:var(--text-muted)] transition hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Marcar como cabeza
+                        </button>
+                      )}
+                      <span
+                        className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${
+                          barber.is_active
+                            ? "border-[color:var(--success)]/40 bg-[color:var(--success-soft)] text-[color:var(--success)]"
+                            : "border-[color:var(--danger)]/40 bg-[color:var(--danger-soft)] text-[color:var(--danger)]"
+                        }`}
+                      >
+                        {barber.is_active ? "Activo" : "Inactivo"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="mt-4 rounded-md border border-[color:var(--border-default)] bg-black px-3 py-3">

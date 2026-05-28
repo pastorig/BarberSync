@@ -14,6 +14,7 @@ export type Barber = {
   displayName?: string;
   whatsapp?: string;
   isActive: boolean;
+  isOwner?: boolean;
   services: BarberService[];
 };
 

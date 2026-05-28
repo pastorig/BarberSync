@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Barber } from "@/data/demo-barbershops";
 import { listActiveBarbersByBarbershop } from "@/lib/barbers";
+import { cn } from "@/lib/cn";
 
 type BarbershopTeamSectionProps = {
   barbershopSlug: string;
@@ -39,6 +40,7 @@ export function BarbershopTeamSection({
           role: dbBarber.role ?? undefined,
           whatsapp: dbBarber.whatsapp ?? undefined,
           isActive: dbBarber.is_active,
+          isOwner: dbBarber.is_owner,
           services: [],
         })),
       );
@@ -70,7 +72,12 @@ export function BarbershopTeamSection({
             return (
               <li
                 key={barber.id}
-                className="group flex items-center gap-4 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] p-5 transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)]/40"
+                className={cn(
+                  "group flex items-center gap-4 rounded-[var(--radius-md)] border bg-[color:var(--surface-1)] p-5 transition-colors duration-[var(--duration-fast)]",
+                  barber.isOwner
+                    ? "border-[color:var(--brand-gold)] shadow-[0_0_0_1px_color-mix(in_oklab,var(--brand-gold)_30%,transparent)]"
+                    : "border-[color:var(--border-subtle)] hover:border-[color:var(--brand-gold)]/40",
+                )}
               >
                 <div
                   aria-hidden="true"

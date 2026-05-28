@@ -86,6 +86,7 @@ async function loadBarbersWithServices(slug: string): Promise<Barber[]> {
     role: barber.role ?? undefined,
     whatsapp: barber.whatsapp ?? undefined,
     isActive: barber.is_active,
+    isOwner: barber.is_owner,
     services: dbServices
       .filter((service) => service.barber_id === barber.id)
       .map((service) => ({

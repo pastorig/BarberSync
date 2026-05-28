@@ -265,6 +265,7 @@ export async function POST(request: Request) {
         role: "Barbero",
         whatsapp: null,
         is_active: true,
+        is_owner: true,
         deleted_at: null,
       })
       .select("id")

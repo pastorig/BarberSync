@@ -18,10 +18,11 @@ export async function listBarbersByBarbershop(barbershopSlug: string) {
   const { data, error } = await getSupabaseClient()
     .from("barbers")
     .select(
-      "id, created_at, barbershop_slug, name, display_name, role, whatsapp, is_active, deleted_at",
+      "id, created_at, barbershop_slug, name, display_name, role, whatsapp, is_active, is_owner, deleted_at",
     )
     .eq("barbershop_slug", barbershopSlug)
     .is("deleted_at", null)
+    .order("is_owner", { ascending: false })
     .order("created_at", { ascending: true });
 
   return { data, error };
@@ -31,11 +32,12 @@ export async function listActiveBarbersByBarbershop(barbershopSlug: string) {
   const { data, error } = await getSupabaseClient()
     .from("barbers")
     .select(
-      "id, created_at, barbershop_slug, name, display_name, role, whatsapp, is_active, deleted_at",
+      "id, created_at, barbershop_slug, name, display_name, role, whatsapp, is_active, is_owner, deleted_at",
     )
     .eq("barbershop_slug", barbershopSlug)
     .eq("is_active", true)
     .is("deleted_at", null)
+    .order("is_owner", { ascending: false })
     .order("created_at", { ascending: true });
 
   return { data, error };
@@ -74,4 +76,36 @@ export async function deleteBarber(barberId: string) {
       deleted_at: new Date().toISOString(),
     },
   });
+}
+
+/**
+ * Marca un barbero como "cabeza" de la barbería. Desmarca primero al resto
+ * para respetar el partial unique index (un solo owner por barbershop_slug).
+ */
+export async function setBarberAsOwner({
+  barberId,
+  barbershopSlug,
+}: {
+  barberId: string;
+  barbershopSlug: string;
+}) {
+  const supabase = getSupabaseClient();
+
+  // 1) Desmarcar a todos los owners actuales de esta barbería.
+  const { error: unsetError } = await supabase
+    .from("barbers")
+    .update({ is_owner: false })
+    .eq("barbershop_slug", barbershopSlug)
+    .eq("is_owner", true);
+  if (unsetError) return { data: null, error: unsetError };
+
+  // 2) Marcar al elegido como owner.
+  return supabase
+    .from("barbers")
+    .update({ is_owner: true })
+    .eq("id", barberId)
+    .select(
+      "id, created_at, barbershop_slug, name, display_name, role, whatsapp, is_active, is_owner, deleted_at",
+    )
+    .single();
 }

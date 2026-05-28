@@ -31,12 +31,14 @@ type BarberInsert = {
   role: string | null;
   whatsapp: string | null;
   is_active: boolean;
+  is_owner?: boolean;
   deleted_at?: string | null;
 };
 
 type BarberRow = BarberInsert & {
   id: string;
   created_at: string;
+  is_owner: boolean;
   deleted_at: string | null;
 };
 
