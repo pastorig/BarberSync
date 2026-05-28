@@ -156,6 +156,31 @@ type PublicBarberDayAppointmentRow = {
   service_duration_minutes: number;
 };
 
+type ContactRequestRow = {
+  id: string;
+  created_at: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  message: string;
+  source: string;
+  handled_at: string | null;
+  handled_by: string | null;
+};
+
+type ContactRequestInsert = {
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  message: string;
+  source?: string;
+};
+
+type ContactRequestUpdate = {
+  handled_at?: string | null;
+  handled_by?: string | null;
+};
+
 type Database = {
   public: {
     Tables: {
@@ -187,6 +212,12 @@ type Database = {
         Row: BarbershopRow;
         Insert: BarbershopInsert;
         Update: BarbershopUpdate;
+        Relationships: [];
+      };
+      contact_requests: {
+        Row: ContactRequestRow;
+        Insert: ContactRequestInsert;
+        Update: ContactRequestUpdate;
         Relationships: [];
       };
       barber_weekly_schedules: {
@@ -292,6 +323,9 @@ export type {
   AppointmentInsert,
   AppointmentRow,
   AppointmentStatus,
+  ContactRequestInsert,
+  ContactRequestRow,
+  ContactRequestUpdate,
   Database,
   BarberInsert,
   BarberRow,
