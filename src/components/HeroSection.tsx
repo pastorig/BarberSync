@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
 import { BookingCTA } from "./BookingCTA";
 
@@ -36,7 +37,7 @@ function WhatsAppGlyph({ className }: { className?: string }) {
 type HeroSectionProps = {
   barbershop: Pick<
     DemoBarbershop,
-    "name" | "description" | "slug" | "instagram" | "whatsapp"
+    "name" | "description" | "slug" | "instagram" | "whatsapp" | "logoUrl"
   >;
 };
 
@@ -68,6 +69,20 @@ export function HeroSection({ barbershop }: HeroSectionProps) {
 
       <div className="mx-auto w-full max-w-6xl px-4 pb-10 pt-8 sm:px-8 sm:pb-14 sm:pt-12 lg:px-12 lg:pb-16 lg:pt-14">
         <div className="animate-fade-up text-center sm:text-left">
+          {barbershop.logoUrl ? (
+            <div className="mx-auto mb-6 flex size-24 items-center justify-center overflow-hidden rounded-full border-2 border-[color:var(--brand-gold)]/40 bg-[color:var(--surface-1)] shadow-[0_0_40px_color-mix(in_oklab,var(--brand-gold)_15%,transparent)] sm:mx-0 sm:size-28">
+              <Image
+                src={barbershop.logoUrl}
+                alt={`Logo de ${barbershop.name}`}
+                width={112}
+                height={112}
+                className="size-full object-cover"
+                unoptimized
+                priority
+              />
+            </div>
+          ) : null}
+
           <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-[color:var(--brand-gold)]">
             Reservas online
           </p>

@@ -4,6 +4,7 @@ import {
   type DemoBarbershop,
 } from "@/data/demo-barbershops";
 import { Logo } from "@/components/ui";
+import { BarbershopGallerySection } from "./BarbershopGallerySection";
 import { BarbershopInfoSection } from "./BarbershopInfoSection";
 import { BarbershopTeamSection } from "./BarbershopTeamSection";
 import { HeroSection } from "./HeroSection";
@@ -49,6 +50,8 @@ export function PublicBarbershopLanding({
         services={getPublicServices(barbershop)}
         barbershopSlug={barbershop.slug}
       />
+
+      <BarbershopGallerySection barbershopSlug={barbershop.slug} />
 
       <BarbershopInfoSection barbershop={barbershop} />
 

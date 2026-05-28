@@ -84,16 +84,21 @@ type BarbershopRow = {
   whatsapp: string | null;
   instagram: string | null;
   address: string | null;
+  logo_url: string | null;
   working_hours_start: string;
   working_hours_end: string;
   slot_interval_minutes: number;
   is_active: boolean;
 };
 
-type BarbershopInsert = Omit<BarbershopRow, "id" | "created_at" | "address"> & {
+type BarbershopInsert = Omit<
+  BarbershopRow,
+  "id" | "created_at" | "address" | "logo_url"
+> & {
   id?: string;
   created_at?: string;
   address?: string | null;
+  logo_url?: string | null;
 };
 
 type BarbershopUpdate = Partial<BarbershopInsert>;
@@ -156,6 +161,31 @@ type PublicBarberDayAppointmentRow = {
   service_duration_minutes: number;
 };
 
+type BarbershopGalleryPhotoRow = {
+  id: string;
+  created_at: string;
+  barbershop_slug: string;
+  storage_path: string;
+  public_url: string;
+  caption: string | null;
+  sort_order: number;
+  deleted_at: string | null;
+};
+
+type BarbershopGalleryPhotoInsert = {
+  barbershop_slug: string;
+  storage_path: string;
+  public_url: string;
+  caption?: string | null;
+  sort_order?: number;
+};
+
+type BarbershopGalleryPhotoUpdate = {
+  caption?: string | null;
+  sort_order?: number;
+  deleted_at?: string | null;
+};
+
 type ContactRequestRow = {
   id: string;
   created_at: string;
@@ -212,6 +242,12 @@ type Database = {
         Row: BarbershopRow;
         Insert: BarbershopInsert;
         Update: BarbershopUpdate;
+        Relationships: [];
+      };
+      barbershop_gallery_photos: {
+        Row: BarbershopGalleryPhotoRow;
+        Insert: BarbershopGalleryPhotoInsert;
+        Update: BarbershopGalleryPhotoUpdate;
         Relationships: [];
       };
       contact_requests: {
@@ -339,6 +375,9 @@ export type {
   BarberServiceRow,
   BarberServiceUpdate,
   BarberUpdate,
+  BarbershopGalleryPhotoInsert,
+  BarbershopGalleryPhotoRow,
+  BarbershopGalleryPhotoUpdate,
   BarbershopInsert,
   BarbershopAdminInsert,
   BarbershopAdminRow,

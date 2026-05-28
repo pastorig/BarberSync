@@ -1,8 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
+import {
+  getStoragePathFromPublicUrl,
+  removeBarbershopLogo,
+  uploadBarbershopLogo,
+} from "@/lib/barbershop-logos";
 import { updateBarbershopSettings } from "@/lib/barbershops";
 
 type AdminSettingsFormProps = {
@@ -25,6 +31,12 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
     String(barbershop.workingHours.intervalMinutes),
   );
   const [isActive, setIsActive] = useState(barbershop.isActive ?? true);
+  const [logoUrl, setLogoUrl] = useState<string | null>(
+    barbershop.logoUrl ?? null,
+  );
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isRemovingLogo, setIsRemovingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -104,6 +116,96 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
     }
   }
 
+  async function handleLogoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIsUploadingLogo(true);
+
+    try {
+      const previousPath = getStoragePathFromPublicUrl(logoUrl);
+      const { data: uploadResult, error: uploadError } =
+        await uploadBarbershopLogo({
+          barbershopSlug: barbershop.slug,
+          file,
+          previousPath,
+        });
+      if (uploadError || !uploadResult) {
+        setErrorMessage("No pudimos subir el logo. Probá con otra imagen.");
+        return;
+      }
+      const newPublicUrl = uploadResult.publicUrl;
+      const { error: updateError } = await updateBarbershopSettings({
+        slug: barbershop.slug,
+        values: {
+          name: name.trim(),
+          description: description?.trim() || null,
+          whatsapp: whatsapp?.trim() || null,
+          instagram: instagram?.trim() || null,
+          address: address?.trim() || null,
+          logo_url: newPublicUrl,
+          working_hours_start: startTime,
+          working_hours_end: endTime,
+          slot_interval_minutes: Number(slotIntervalMinutes),
+          is_active: isActive,
+        },
+      });
+      if (updateError) {
+        setErrorMessage("Subimos el logo pero falló guardar la URL.");
+        return;
+      }
+      setLogoUrl(newPublicUrl);
+      setSuccessMessage("Logo actualizado.");
+    } catch {
+      setErrorMessage("No pudimos subir el logo.");
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
+  async function handleRemoveLogo() {
+    if (!logoUrl) return;
+    const ok = window.confirm("¿Quitar el logo de tu barbería?");
+    if (!ok) return;
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIsRemovingLogo(true);
+
+    try {
+      const storagePath = getStoragePathFromPublicUrl(logoUrl);
+      if (storagePath) {
+        await removeBarbershopLogo({ storagePath });
+      }
+      const { error: updateError } = await updateBarbershopSettings({
+        slug: barbershop.slug,
+        values: {
+          name: name.trim(),
+          description: description?.trim() || null,
+          whatsapp: whatsapp?.trim() || null,
+          instagram: instagram?.trim() || null,
+          address: address?.trim() || null,
+          logo_url: null,
+          working_hours_start: startTime,
+          working_hours_end: endTime,
+          slot_interval_minutes: Number(slotIntervalMinutes),
+          is_active: isActive,
+        },
+      });
+      if (updateError) {
+        setErrorMessage("No pudimos quitar el logo.");
+        return;
+      }
+      setLogoUrl(null);
+      setSuccessMessage("Logo eliminado.");
+    } catch {
+      setErrorMessage("No pudimos quitar el logo.");
+    } finally {
+      setIsRemovingLogo(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-black text-white">
       <section className="mx-auto w-full max-w-5xl px-3 py-5 sm:px-6 sm:py-8 lg:px-12 lg:py-12">
@@ -139,6 +241,60 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
             </p>
 
             <div className="mt-4 grid gap-3">
+              {/* Logo */}
+              <div>
+                <p className="text-[11px] font-bold uppercase text-[color:var(--text-muted)]">
+                  Logo
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-4 rounded-md border border-[color:var(--border-default)] bg-black p-3">
+                  <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[color:var(--border-default)] bg-[color:var(--surface-1)]">
+                    {logoUrl ? (
+                      <Image
+                        src={logoUrl}
+                        alt={`Logo de ${barbershop.name}`}
+                        fill
+                        sizes="80px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <span className="font-mono text-xs font-bold uppercase text-[color:var(--text-muted)]">
+                        Sin logo
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid flex-1 gap-2">
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      onChange={handleLogoChange}
+                      disabled={isUploadingLogo || isRemovingLogo}
+                      className="block w-full text-xs text-[color:var(--text-muted)] file:mr-3 file:rounded-md file:border file:border-[color:var(--brand-gold)]/40 file:bg-[color:var(--brand-gold-soft)] file:px-3 file:py-2 file:text-[10px] file:font-bold file:uppercase file:tracking-[0.14em] file:text-[color:var(--brand-gold)] hover:file:bg-[color:var(--brand-gold-soft)]/80 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    <p className="text-[10px] text-[color:var(--text-subtle)]">
+                      PNG, JPG, WebP o SVG. Máx 2MB. Se muestra circular
+                      en la landing pública.
+                    </p>
+                    {logoUrl ? (
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        disabled={isUploadingLogo || isRemovingLogo}
+                        className="self-start text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--danger)] transition-colors duration-[var(--duration-fast)] hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isRemovingLogo ? "Quitando…" : "Quitar logo"}
+                      </button>
+                    ) : null}
+                    {isUploadingLogo ? (
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--brand-gold)]">
+                        Subiendo…
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label
                   htmlFor="settings-name"

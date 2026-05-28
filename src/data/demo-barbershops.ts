@@ -32,6 +32,7 @@ export type DemoBarbershop = {
   instagram: string;
   whatsapp: string;
   address?: string;
+  logoUrl?: string;
   barbers: Barber[];
   workingHours: WorkingHours;
   isActive?: boolean;

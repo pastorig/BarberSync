@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarDays,
   ExternalLink,
+  Image as ImageIcon,
   LayoutDashboard,
   LineChart,
   LogOut,
@@ -61,6 +62,11 @@ export function AdminSidebar({
       label: "Barberos",
       href: `/${barbershopSlug}/admin/barbers`,
       icon: Users,
+    },
+    {
+      label: "Galería",
+      href: `/${barbershopSlug}/admin/galeria`,
+      icon: ImageIcon,
     },
   ];
 
