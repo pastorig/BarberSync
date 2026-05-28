@@ -105,21 +105,7 @@ export async function POST(request: Request) {
   const fromAddress =
     process.env.OWNER_NOTIFICATION_FROM || "BarberSync <onboarding@resend.dev>";
 
-  // Debug temporal: devolvemos info del envío para diagnosticar.
-  const debug: {
-    resendConfigured: boolean;
-    ownerEmailConfigured: boolean;
-    emailAttempted: boolean;
-    emailId?: string;
-    emailError?: string;
-  } = {
-    resendConfigured: Boolean(resendApiKey),
-    ownerEmailConfigured: Boolean(ownerEmail),
-    emailAttempted: false,
-  };
-
   if (resendApiKey && ownerEmail) {
-    debug.emailAttempted = true;
     try {
       const resend = new Resend(resendApiKey);
       const subject = `BarberSync · Nuevo mensaje de ${name}`;
@@ -145,21 +131,16 @@ export async function POST(request: Request) {
       if (result.error) {
         Sentry.captureException(result.error);
         console.error("[contact-requests] resend error", result.error);
-        debug.emailError = `${result.error.name}: ${result.error.message}`;
-      } else if (result.data?.id) {
-        debug.emailId = result.data.id;
       }
     } catch (emailError) {
       Sentry.captureException(emailError);
       console.error("[contact-requests] resend exception", emailError);
-      debug.emailError =
-        emailError instanceof Error ? emailError.message : "unknown";
       // No fallamos la request del cliente, ya guardamos en DB.
     }
   }
 
   return NextResponse.json(
-    { ok: true, id: inserted.id, debug },
+    { ok: true, id: inserted.id },
     { status: 201 },
   );
 }
