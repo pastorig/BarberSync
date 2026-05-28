@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
 import { getCurrentSession } from "@/lib/auth";
-import { updateBarbershopSettings } from "@/lib/barbershops";
 
 type AdminSettingsFormProps = {
   barbershop: DemoBarbershop;
@@ -75,38 +74,69 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
     setIsSaving(true);
 
     try {
-      const { data, error } = await updateBarbershopSettings({
-        slug: barbershop.slug,
-        values: {
+      const { data: sessionData } = await getCurrentSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setErrorMessage("Tu sesión expiró, volvé a iniciar sesión.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/barbershop-settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          barbershopSlug: barbershop.slug,
           name: name.trim(),
           description: description.trim() || null,
           whatsapp: whatsapp.trim() || null,
           instagram: instagram.trim() || null,
           address: address.trim() || null,
-          working_hours_start: startTime,
-          working_hours_end: endTime,
-          slot_interval_minutes: intervalValue,
-          is_active: isActive,
-        },
+          workingHoursStart: startTime,
+          workingHoursEnd: endTime,
+          slotIntervalMinutes: intervalValue,
+          isActive,
+        }),
       });
 
-      if (error || !data) {
-        setErrorMessage("No pudimos guardar la configuracion.");
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setErrorMessage(
+          payload.error ?? "No pudimos guardar la configuración.",
+        );
         return;
       }
 
-      setName(data.name);
-      setDescription(data.description);
-      setWhatsapp(data.whatsapp);
-      setInstagram(data.instagram);
-      setAddress(data.address ?? "");
-      setStartTime(data.workingHours.start);
-      setEndTime(data.workingHours.end);
-      setSlotIntervalMinutes(String(data.workingHours.intervalMinutes));
-      setIsActive(data.isActive ?? true);
-      setSuccessMessage("Configuracion guardada correctamente.");
+      const payload = (await response.json()) as {
+        barbershop: {
+          name: string;
+          description: string | null;
+          whatsapp: string | null;
+          instagram: string | null;
+          address: string | null;
+          working_hours_start: string;
+          working_hours_end: string;
+          slot_interval_minutes: number;
+          is_active: boolean;
+        };
+      };
+      const fresh = payload.barbershop;
+      setName(fresh.name);
+      setDescription(fresh.description ?? "");
+      setWhatsapp(fresh.whatsapp ?? "");
+      setInstagram(fresh.instagram ?? "");
+      setAddress(fresh.address ?? "");
+      setStartTime(fresh.working_hours_start);
+      setEndTime(fresh.working_hours_end);
+      setSlotIntervalMinutes(String(fresh.slot_interval_minutes));
+      setIsActive(fresh.is_active ?? true);
+      setSuccessMessage("Configuración guardada correctamente.");
     } catch {
-      setErrorMessage("No pudimos guardar la configuracion.");
+      setErrorMessage("No pudimos guardar la configuración.");
     } finally {
       setIsSaving(false);
     }
