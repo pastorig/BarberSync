@@ -116,6 +116,49 @@ export async function PATCH(request: Request) {
   }
 
   const supabaseAdmin = getSupabaseAdminClient();
+
+  // Verificamos primero que el barbershop exista en la DB. Si solo está
+  // en el fallback demo (demo-barbershops.ts) y no en la tabla, lo
+  // creamos con upsert para que el update siguiente funcione.
+  const { data: existing } = await supabaseAdmin
+    .from("barbershops")
+    .select("id")
+    .eq("slug", barbershopSlug)
+    .maybeSingle();
+
+  if (!existing) {
+    // Crear el row primero con upsert.
+    const { error: upsertError } = await supabaseAdmin
+      .from("barbershops")
+      .upsert(
+        {
+          slug: barbershopSlug,
+          name,
+          description: asTrimmedOrNull(payload.description),
+          whatsapp: asTrimmedOrNull(payload.whatsapp),
+          instagram: asTrimmedOrNull(payload.instagram),
+          address: asTrimmedOrNull(payload.address),
+          working_hours_start: startTime,
+          working_hours_end: endTime,
+          slot_interval_minutes: intervalValue,
+          is_active: Boolean(payload.isActive ?? true),
+        },
+        { onConflict: "slug" },
+      );
+    if (upsertError) {
+      Sentry.captureException(upsertError);
+      console.error("[barbershop-settings] upsert error", upsertError);
+      return NextResponse.json(
+        {
+          error: "No pudimos crear la barbería en la base.",
+          debug: upsertError.message,
+          code: upsertError.code,
+        },
+        { status: 500 },
+      );
+    }
+  }
+
   const { data: barbershop, error: updateError } = await supabaseAdmin
     .from("barbershops")
     .update({
