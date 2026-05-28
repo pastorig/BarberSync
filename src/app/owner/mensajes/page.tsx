@@ -1,12 +1,12 @@
 import { OwnerAuthGuard } from "@/components/OwnerAuthGuard";
-import { OwnerDashboard } from "@/components/OwnerDashboard";
+import { OwnerMessagesList } from "@/components/owner/OwnerMessagesList";
 import { OwnerShell } from "@/components/owner/OwnerShell";
 
-export default function OwnerPage() {
+export default function OwnerMessagesPage() {
   return (
     <OwnerAuthGuard>
       <OwnerShell>
-        <OwnerDashboard />
+        <OwnerMessagesList />
       </OwnerShell>
     </OwnerAuthGuard>
   );

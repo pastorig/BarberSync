@@ -7,7 +7,6 @@ import {
   getOwnerDashboardMetrics,
   type OwnerDashboardMetrics,
 } from "@/lib/owner-metrics";
-import { Logo } from "@/components/ui";
 
 const emptyMetrics: OwnerDashboardMetrics = {
   knownBarbershopsCount: 0,
@@ -316,36 +315,33 @@ export function OwnerDashboard() {
   ];
 
   return (
-    <main className="min-h-screen bg-black text-white">
-      <header className="sticky top-0 z-10 border-b border-[color:var(--border-subtle)] bg-black/95 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-12">
-        <Link href="/" aria-label="Ir al inicio" className="inline-flex">
-          <Logo size="sm" />
-        </Link>
-      </header>
-      <section className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-6 sm:py-8 lg:px-12 lg:py-12">
-        <div className="rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-4 shadow-2xl shadow-black/25 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase text-[color:var(--brand-gold)] sm:text-sm">
-                BarberSync
-              </p>
-              <h1 className="mt-2 text-3xl font-black text-white sm:text-5xl">
-                Owner
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--text-secondary)] sm:text-base sm:leading-7">
-                Vista central de barberias conocidas, operacion general y
-                accesos de plataforma. El owner administra BarberSync en
-                general; cada barberia mantiene su propio correo admin.
-              </p>
-            </div>
-            <Link
-              href="/owner/create-barbershop"
-              className="inline-flex min-h-10 items-center justify-center rounded-md bg-[color:var(--brand-gold)] px-4 py-2 text-sm font-bold uppercase text-black transition hover:bg-[color:var(--brand-gold-hi)]"
-            >
-              Crear barberia
-            </Link>
+    <div className="space-y-6 sm:space-y-8">
+      <header className="animate-fade-up">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--brand-gold)] sm:tracking-[0.32em]">
+          Owner BarberSync
+        </p>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-black uppercase tracking-tight text-balance text-white sm:text-4xl lg:text-5xl">
+              Dashboard
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--text-secondary)] sm:text-base">
+              Vista central de barberías, operación general y accesos de
+              plataforma. Cada barbería mantiene su propio correo admin.
+            </p>
           </div>
+          <Link
+            href="/owner/create-barbershop"
+            className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] bg-[color:var(--brand-gold)] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-black transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-hi)]"
+          >
+            Crear barbería
+          </Link>
         </div>
+      </header>
+
+      <section>
+        {/* Bloque legacy del dashboard owner. Se mantiene la lógica interna
+            intacta; el shell ahora trae el sidebar y la nav. */}
 
         {isLoading ? (
           <div className="mt-4 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-5 text-[color:var(--text-secondary)] sm:mt-6">
@@ -570,6 +566,6 @@ export function OwnerDashboard() {
           </>
         ) : null}
       </section>
-    </main>
+    </div>
   );
 }

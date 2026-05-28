@@ -1,16 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { getCurrentSession } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import {
   Button,
   Field,
   Input,
-  Logo,
   Select,
   Textarea,
 } from "@/components/ui";
@@ -233,22 +231,11 @@ export function OwnerCreateBarbershopForm() {
   }
 
   return (
-    <main className="min-h-screen bg-black text-white">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-5 sm:px-8 sm:py-6 lg:px-12">
-        <Link
-          href="/owner"
-          className="inline-flex min-w-0 items-center gap-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)] transition-colors duration-[var(--duration-fast)] hover:text-[color:var(--brand-gold)] sm:tracking-[0.2em]"
-        >
-          <ArrowLeft className="size-3.5 shrink-0" />
-          <span className="truncate">Owner</span>
-        </Link>
-        <Logo variant="mark" size="sm" className="shrink-0" />
-      </nav>
-
-      <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
-        <header className="mb-10 animate-fade-up">
+    <div className="space-y-6 sm:space-y-8">
+      <div>
+        <header className="animate-fade-up">
           <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--brand-gold)] sm:tracking-[0.32em]">
-            BarberSync Owner
+            Owner BarberSync
           </p>
           <h1 className="mt-4 text-3xl font-black uppercase tracking-tight text-balance text-white sm:text-4xl lg:text-5xl">
             Nueva barbería
@@ -718,7 +705,7 @@ export function OwnerCreateBarbershopForm() {
           </Button>
         </form>
       </div>
-    </main>
+    </div>
   );
 }
 
