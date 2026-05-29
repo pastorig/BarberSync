@@ -13,6 +13,10 @@ import {
 } from "@/lib/appointments";
 import { listActiveServicesByBarbershop } from "@/lib/barber-services";
 import { listBarbersByBarbershop } from "@/lib/barbers";
+import {
+  listClientsByBarbershop,
+  normalizePhone,
+} from "@/lib/barbershop-clients";
 import { cn } from "@/lib/cn";
 import {
   formatDateForDisplay,
@@ -33,6 +37,7 @@ import type {
   BarberDayOverrideRow,
   BarberRow,
   BarberServiceRow,
+  BarbershopClientRow,
   BarberWeeklyScheduleRow,
 } from "@/lib/supabase";
 import { createWhatsAppConfirmationLink } from "@/lib/whatsapp";
@@ -66,6 +71,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [barbers, setBarbers] = useState<BarberRow[]>([]);
   const [services, setServices] = useState<BarberServiceRow[]>([]);
+  const [clients, setClients] = useState<BarbershopClientRow[]>([]);
   const [weeklySchedulesByBarber, setWeeklySchedulesByBarber] = useState<
     Record<string, BarberWeeklyScheduleRow[]>
   >({});
@@ -268,6 +274,24 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
 
   // Mapa barberId ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ duraciÃƒÆ’Ã‚Â³n mÃƒÆ’Ã‚Â­nima de sus servicios activos.
   // Usado para calcular cuÃƒÆ’Ã‚Â¡ntos cortes posibles caben en un gap.
+  // Mapa phone_normalized → tags del cliente. Para mostrar badges al
+  // lado del nombre en cada AppointmentRow del turnero.
+  const tagsByPhone = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const client of clients) {
+      if (client.tags && client.tags.length > 0) {
+        map.set(client.phone_normalized, client.tags);
+      }
+    }
+    return map;
+  }, [clients]);
+
+  function getTagsForAppointment(appointment: AppointmentRow): string[] {
+    const phoneNorm = normalizePhone(appointment.customer_phone);
+    if (!phoneNorm) return [];
+    return tagsByPhone.get(phoneNorm) ?? [];
+  }
+
   const minDurationByBarber = useMemo(() => {
     const map = new Map<string, number>();
     services.forEach((s) => {
@@ -720,11 +744,13 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       setIsLoading(true);
       setErrorMessage("");
       try {
-        const [appsResult, barbersResult, servicesResult] = await Promise.all([
-          listAppointmentsByBarbershop(barbershop.slug),
-          listBarbersByBarbershop(barbershop.slug),
-          listActiveServicesByBarbershop(barbershop.slug),
-        ]);
+        const [appsResult, barbersResult, servicesResult, clientsResult] =
+          await Promise.all([
+            listAppointmentsByBarbershop(barbershop.slug),
+            listBarbersByBarbershop(barbershop.slug),
+            listActiveServicesByBarbershop(barbershop.slug),
+            listClientsByBarbershop(barbershop.slug),
+          ]);
         if (!isMounted) return;
         if (appsResult.error) {
           setErrorMessage("No pudimos cargar las reservas.");
@@ -746,6 +772,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
         setAppointments(appsResult.data ?? []);
         setBarbers(currentBarbers);
         setServices(servicesResult.data ?? []);
+        setClients(clientsResult.data ?? []);
         setWeeklySchedulesByBarber(Object.fromEntries(weeklyScheduleEntries));
       } catch {
         if (isMounted) {
@@ -753,6 +780,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
           setAppointments([]);
           setBarbers([]);
           setServices([]);
+          setClients([]);
           setWeeklySchedulesByBarber({});
         }
       } finally {
@@ -1118,6 +1146,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                           : undefined
                       }
                       showDate={isSearching || activeFilter === "all"}
+                      clientTags={getTagsForAppointment(appointment)}
                     />,
                   ];
 

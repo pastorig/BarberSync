@@ -10,6 +10,10 @@ import {
   TimerReset,
   X,
 } from "lucide-react";
+import {
+  getTagTone,
+  tagClassesFor,
+} from "@/components/admin/ClientTagsEditor";
 import { cn } from "@/lib/cn";
 import { formatPrice, normalizeDateValue } from "@/lib/format";
 import type { AppointmentRow as AppointmentData } from "@/lib/supabase";
@@ -49,6 +53,8 @@ type AppointmentRowProps = ActionHandlers &
       delayMinutes: number;
     };
     showDate?: boolean;
+    /** Tags del cliente (si están cargados). Se muestran al lado del nombre. */
+    clientTags?: string[];
   };
 
 type StatusMeta = {
@@ -118,6 +124,7 @@ export function AppointmentRow({
   onAcceptOvertime,
   scheduleProjection,
   showDate,
+  clientTags,
 }: AppointmentRowProps) {
   const status = appointment.status ?? "pending";
   const meta = getStatusMeta(status);
@@ -179,9 +186,22 @@ export function AppointmentRow({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <p className="truncate text-sm font-bold text-white sm:text-base">
-              {appointment.customer_name}
-            </p>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+              <p className="truncate text-sm font-bold text-white sm:text-base">
+                {appointment.customer_name}
+              </p>
+              {clientTags?.slice(0, 2).map((tag) => (
+                <span
+                  key={tag}
+                  className={cn(
+                    "inline-flex shrink-0 items-center rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]",
+                    tagClassesFor(getTagTone(tag)),
+                  )}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
             <span
               className={cn(
                 "inline-flex shrink-0 items-center rounded-[var(--radius-xs)] border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em]",

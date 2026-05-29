@@ -9,6 +9,11 @@ import {
   Search,
   Users,
 } from "lucide-react";
+import {
+  ClientTagsEditor,
+  getTagTone,
+  tagClassesFor,
+} from "@/components/admin/ClientTagsEditor";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
 import { getCurrentSession } from "@/lib/auth";
 import { listAppointmentsByBarbershop } from "@/lib/appointments";
@@ -38,6 +43,7 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [editedNotes, setEditedNotes] = useState("");
   const [editedName, setEditedName] = useState("");
+  const [editedTags, setEditedTags] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -140,6 +146,7 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
     setSelectedClientId(client.id);
     setEditedNotes(client.notes ?? "");
     setEditedName(client.name);
+    setEditedTags(client.tags ?? []);
     setSuccessMessage("");
     setErrorMessage("");
   }
@@ -168,6 +175,7 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
           barbershopSlug: barbershop.slug,
           name: editedName.trim() || client.name,
           notes: editedNotes,
+          tags: editedTags,
         }),
       });
       if (!response.ok) {
@@ -283,6 +291,18 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
                 placeholder="Notas que solo vos ves: preferencias, alergias, comportamiento…"
                 className="mt-2 w-full rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-black px-3 py-3 text-sm text-white outline-none transition placeholder:text-[color:var(--text-subtle)] focus:border-[color:var(--brand-gold)]"
               />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                Tags
+              </p>
+              <div className="mt-2 rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-black p-3">
+                <ClientTagsEditor
+                  tags={editedTags}
+                  disabled={isSaving}
+                  onChange={setEditedTags}
+                />
+              </div>
             </div>
             {errorMessage ? (
               <p
@@ -466,9 +486,22 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
                     .join("")}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-white sm:text-base">
-                    {client.name}
-                  </p>
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <p className="truncate text-sm font-bold text-white sm:text-base">
+                      {client.name}
+                    </p>
+                    {client.tags?.slice(0, 3).map((tag) => (
+                      <span
+                        key={tag}
+                        className={cn(
+                          "inline-flex shrink-0 items-center rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]",
+                          tagClassesFor(getTagTone(tag)),
+                        )}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                   <p className="mt-0.5 truncate font-mono text-xs text-[color:var(--text-muted)]">
                     {client.phone_display}
                   </p>
