@@ -516,6 +516,18 @@ type Database = {
           reason: string | null;
         }>;
       };
+      list_public_reviews_by_barbershop_slug: {
+        Args: { p_barbershop_slug: string; p_limit?: number };
+        Returns: Array<{
+          id: string;
+          rating: number;
+          comment: string;
+          customer_first_name: string;
+          service_name: string | null;
+          barber_name: string | null;
+          created_at: string;
+        }>;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

@@ -3,9 +3,11 @@ import {
   getPublicServices,
   type DemoBarbershop,
 } from "@/data/demo-barbershops";
+import type { PublicReview } from "@/lib/appointment-reviews";
 import { Logo } from "@/components/ui";
 import { BarbershopGallerySection } from "./BarbershopGallerySection";
 import { BarbershopInfoSection } from "./BarbershopInfoSection";
+import { BarbershopReviewsSection } from "./BarbershopReviewsSection";
 import { BarbershopTeamSection } from "./BarbershopTeamSection";
 import { HeroSection } from "./HeroSection";
 import { PublicBarbershopFooter } from "./PublicBarbershopFooter";
@@ -13,10 +15,12 @@ import { ServicesSection } from "./ServicesSection";
 
 type PublicBarbershopLandingProps = {
   barbershop: DemoBarbershop;
+  reviews?: PublicReview[];
 };
 
 export function PublicBarbershopLanding({
   barbershop,
+  reviews = [],
 }: PublicBarbershopLandingProps) {
   return (
     <main className="min-h-screen bg-black text-white">
@@ -52,6 +56,14 @@ export function PublicBarbershopLanding({
       />
 
       <BarbershopGallerySection barbershopSlug={barbershop.slug} />
+
+      {reviews.length > 0 ? (
+        <BarbershopReviewsSection
+          reviews={reviews}
+          barbershopSlug={barbershop.slug}
+          googleReviewsUrl={barbershop.googleReviewsUrl}
+        />
+      ) : null}
 
       <BarbershopInfoSection barbershop={barbershop} />
 

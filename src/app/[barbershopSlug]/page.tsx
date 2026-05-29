@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { PublicBarbershopLanding } from "@/components/PublicBarbershopLanding";
+import { listPublicReviewsByBarbershop } from "@/lib/appointment-reviews";
 import { resolveBarbershopBySlug } from "@/lib/barbershops";
 
 type BarbershopPageProps = {
@@ -22,5 +23,12 @@ export default async function BarbershopPage({
     notFound();
   }
 
-  return <PublicBarbershopLanding barbershop={barbershop} />;
+  const { data: reviews } = await listPublicReviewsByBarbershop(
+    barbershopSlug,
+    6,
+  );
+
+  return (
+    <PublicBarbershopLanding barbershop={barbershop} reviews={reviews} />
+  );
 }

@@ -70,6 +70,33 @@ export async function submitReviewByToken({
   };
 }
 
+export type PublicReview = {
+  id: string;
+  rating: number;
+  comment: string;
+  customer_first_name: string;
+  service_name: string | null;
+  barber_name: string | null;
+  created_at: string;
+};
+
+/**
+ * Lista pública de reseñas para mostrar en la landing.
+ * Solo trae rating>=4 con comment no-vacío. Filtra campos sensibles
+ * (sin teléfono, sin id de appointment, solo primer nombre).
+ */
+export async function listPublicReviewsByBarbershop(
+  barbershopSlug: string,
+  limit: number = 6,
+) {
+  const { data, error } = await getSupabaseClient().rpc(
+    "list_public_reviews_by_barbershop_slug",
+    { p_barbershop_slug: barbershopSlug, p_limit: limit },
+  );
+  if (error) return { data: [] as PublicReview[], error };
+  return { data: (data ?? []) as PublicReview[], error: null };
+}
+
 /**
  * Lista reseñas de una barbería con el contexto del turno asociado.
  * Pensado para uso admin (depende de RLS).
