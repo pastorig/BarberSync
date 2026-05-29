@@ -7,8 +7,12 @@ import {
   ArrowLeft,
   CalendarDays,
   Phone,
+  Scissors,
   Search,
+  TrendingUp,
+  UserRound,
   Users,
+  Wallet,
 } from "lucide-react";
 import {
   ClientTagsEditor,
@@ -34,6 +38,7 @@ import { createWhatsAppReactivationLink } from "@/lib/whatsapp";
 import { cn } from "@/lib/cn";
 import {
   formatDateForDisplay,
+  formatPrice,
   normalizeDateValue,
   normalizeTimeValue,
 } from "@/lib/format";
@@ -195,6 +200,85 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
         return b.appointment_time.localeCompare(a.appointment_time);
       });
   }, [selectedClient, appointmentsByClient]);
+
+  /**
+   * Métricas derivadas de los turnos del cliente seleccionado.
+   * Solo cuenta visitas "completadas" (no canceladas, no eliminadas, fecha pasada o hoy).
+   */
+  const selectedClientInsights = useMemo(() => {
+    if (!selectedClient) return null;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const completed = selectedClientAppointments.filter(
+      (a) =>
+        a.status !== "cancelled" &&
+        a.status !== "deleted" &&
+        normalizeDateValue(a.appointment_date) <= todayIso,
+    );
+
+    if (completed.length === 0) {
+      return {
+        lifetimeValue: 0,
+        avgFrequencyDays: null as number | null,
+        favoriteBarber: null as string | null,
+        favoriteService: null as string | null,
+        cancelledCount: selectedClientAppointments.filter(
+          (a) => a.status === "cancelled",
+        ).length,
+      };
+    }
+
+    // Lifetime value = suma de service_price de visitas completadas
+    const lifetimeValue = completed.reduce(
+      (sum, a) => sum + (a.service_price ?? 0),
+      0,
+    );
+
+    // Frecuencia promedio entre visitas (en días)
+    let avgFrequencyDays: number | null = null;
+    if (completed.length >= 2) {
+      const datesSorted = completed
+        .map((a) => normalizeDateValue(a.appointment_date))
+        .sort();
+      let totalGapDays = 0;
+      for (let i = 1; i < datesSorted.length; i++) {
+        totalGapDays += daysBetween(datesSorted[i - 1], datesSorted[i]);
+      }
+      avgFrequencyDays = Math.round(totalGapDays / (datesSorted.length - 1));
+    }
+
+    // Mode helper
+    const modeBy = <T,>(items: T[], key: (x: T) => string | null): string | null => {
+      const counts = new Map<string, number>();
+      for (const it of items) {
+        const k = key(it);
+        if (!k) continue;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      let topKey: string | null = null;
+      let topCount = 0;
+      for (const [k, n] of counts) {
+        if (n > topCount) {
+          topCount = n;
+          topKey = k;
+        }
+      }
+      return topKey;
+    };
+
+    const favoriteBarber = modeBy(completed, (a) => a.barber_name ?? null);
+    const favoriteService = modeBy(completed, (a) => a.service_name ?? null);
+    const cancelledCount = selectedClientAppointments.filter(
+      (a) => a.status === "cancelled",
+    ).length;
+
+    return {
+      lifetimeValue,
+      avgFrequencyDays,
+      favoriteBarber,
+      favoriteService,
+      cancelledCount,
+    };
+  }, [selectedClient, selectedClientAppointments]);
 
   function handleSelectClient(client: BarbershopClient) {
     setSelectedClientId(client.id);
@@ -362,6 +446,62 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
             </p>
           </div>
         </section>
+
+        {/* Insights derivados */}
+        {selectedClientInsights ? (
+          <section className="rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] p-5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--brand-gold)]">
+              Comportamiento
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <InsightCard
+                icon={<Wallet className="size-4" aria-hidden="true" />}
+                label="Lifetime value"
+                value={
+                  selectedClientInsights.lifetimeValue > 0
+                    ? formatPrice(selectedClientInsights.lifetimeValue)
+                    : "—"
+                }
+                accent
+              />
+              <InsightCard
+                icon={<TrendingUp className="size-4" aria-hidden="true" />}
+                label="Frecuencia"
+                value={
+                  selectedClientInsights.avgFrequencyDays !== null
+                    ? `Cada ${selectedClientInsights.avgFrequencyDays}d`
+                    : "—"
+                }
+                hint={
+                  selectedClientInsights.avgFrequencyDays === null
+                    ? "Necesita ≥2 visitas"
+                    : undefined
+                }
+              />
+              <InsightCard
+                icon={<UserRound className="size-4" aria-hidden="true" />}
+                label="Barbero preferido"
+                value={selectedClientInsights.favoriteBarber ?? "—"}
+              />
+              <InsightCard
+                icon={<Scissors className="size-4" aria-hidden="true" />}
+                label="Servicio favorito"
+                value={selectedClientInsights.favoriteService ?? "—"}
+              />
+            </div>
+            {selectedClientInsights.cancelledCount > 0 ? (
+              <p className="mt-4 text-[11px] text-[color:var(--text-muted)]">
+                <span className="font-bold text-[color:var(--danger)]">
+                  {selectedClientInsights.cancelledCount}
+                </span>{" "}
+                {selectedClientInsights.cancelledCount === 1
+                  ? "turno cancelado histórico"
+                  : "turnos cancelados históricos"}
+                .
+              </p>
+            ) : null}
+          </section>
+        ) : null}
 
         {/* Editar nombre + notas */}
         <section className="rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] p-5">
@@ -775,6 +915,58 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
           )}
         </ul>
       )}
+    </div>
+  );
+}
+
+function InsightCard({
+  icon,
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-[var(--radius-sm)] border p-3",
+        accent
+          ? "border-[color:var(--brand-gold)]/30 bg-[color:var(--brand-gold-soft)]"
+          : "border-[color:var(--border-subtle)] bg-[color:var(--surface-0)]/60",
+      )}
+    >
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+        <span
+          className={cn(
+            accent
+              ? "text-[color:var(--brand-gold)]"
+              : "text-[color:var(--text-subtle)]",
+          )}
+        >
+          {icon}
+        </span>
+        {label}
+      </div>
+      <p
+        className={cn(
+          "mt-1.5 truncate text-sm font-bold",
+          accent ? "text-[color:var(--brand-gold)]" : "text-white",
+        )}
+        title={value}
+      >
+        {value}
+      </p>
+      {hint ? (
+        <p className="mt-0.5 text-[10px] text-[color:var(--text-subtle)]">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }
