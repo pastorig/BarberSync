@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowUpRight } from "lucide-react";
 import {
@@ -593,23 +594,93 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     );
   }
 
+  if (waitlistSubmitted) {
+    return (
+      <article className="animate-fade-up text-center">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-full border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] text-[color:var(--success)]">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-7"
+            aria-hidden="true"
+          >
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        </div>
+        <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.32em] text-[color:var(--brand-gold)]">
+          Lista de espera
+        </p>
+        <h1 className="mt-3 text-3xl font-black uppercase leading-[0.95] tracking-tight text-balance text-white sm:text-4xl">
+          Te anotamos en la lista
+        </h1>
+        <p className="mx-auto mt-4 max-w-md text-sm leading-7 text-[color:var(--text-secondary)] sm:text-base">
+          Si se libera un horario para el{" "}
+          <span className="font-bold text-white">
+            {formatDateForDisplay(selectedDate)}
+          </span>{" "}
+          con{" "}
+          <span className="font-bold text-white">{selectedBarberName}</span>,{" "}
+          {barbershop.name} te va a escribir por WhatsApp al{" "}
+          <span className="font-mono text-[color:var(--brand-gold)]">
+            {clientPhone.trim()}
+          </span>{" "}
+          con un link para confirmar el turno con un click.
+        </p>
+
+        <dl className="mx-auto mt-8 grid max-w-sm gap-3 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] p-4 text-left text-xs text-[color:var(--text-secondary)]">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+              Servicio
+            </dt>
+            <dd className="font-semibold text-white">
+              {selectedService?.name ?? "—"}
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+              Barbero
+            </dt>
+            <dd className="font-semibold text-white">{selectedBarberName}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+              Fecha
+            </dt>
+            <dd className="font-semibold text-white">
+              {formatDateForDisplay(selectedDate)}
+            </dd>
+          </div>
+        </dl>
+
+        <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              setWaitlistSubmitted(false);
+              setSelectedDate(getTodayInputValue());
+            }}
+            className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-sm)] bg-[color:var(--brand-gold)] px-6 text-[11px] font-bold uppercase tracking-[0.14em] text-black transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-hi)]"
+          >
+            Probar otra fecha
+          </button>
+          <Link
+            href={`/${barbershop.slug}`}
+            className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--text-muted)] transition-colors duration-[var(--duration-fast)] hover:text-[color:var(--brand-gold)]"
+          >
+            Volver al inicio
+          </Link>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <>
-      {waitlistSubmitted ? (
-        <div
-          role="status"
-          className="mb-6 rounded-[var(--radius-md)] border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] p-4"
-        >
-          <p className="text-sm font-bold text-[color:var(--success)]">
-            ✓ Te anotamos en la lista de espera
-          </p>
-          <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
-            Si se libera un horario para {selectedDate}, te avisamos por
-            WhatsApp.
-          </p>
-        </div>
-      ) : null}
-
       {showWaitlistForm ? (
         <div
           role="dialog"

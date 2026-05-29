@@ -6,6 +6,7 @@ import {
   Check,
   MessageCircle,
   Phone,
+  RefreshCw,
   RotateCcw,
   Trash2,
 } from "lucide-react";
@@ -37,34 +38,42 @@ export function AdminWaitlistManager({ barbershop }: AdminWaitlistManagerProps) 
   const [errorMessage, setErrorMessage] = useState("");
   const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function load() {
-      setIsLoading(true);
-      setErrorMessage("");
-      try {
-        const [entriesResult, barbersResult] = await Promise.all([
-          listWaitlistByBarbershop(barbershop.slug),
-          listBarbersByBarbershop(barbershop.slug),
-        ]);
-        if (!isMounted) return;
-        if (entriesResult.error) {
+  async function refresh(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setIsLoading(true);
+    if (!opts?.silent) setErrorMessage("");
+    try {
+      const [entriesResult, barbersResult] = await Promise.all([
+        listWaitlistByBarbershop(barbershop.slug),
+        listBarbersByBarbershop(barbershop.slug),
+      ]);
+      if (entriesResult.error) {
+        if (!opts?.silent) {
           setErrorMessage("No pudimos cargar la lista de espera.");
-          return;
         }
-        setEntries(entriesResult.data ?? []);
-        setBarbers(barbersResult.data ?? []);
-      } catch {
-        if (isMounted) setErrorMessage("No pudimos cargar la lista de espera.");
-      } finally {
-        if (isMounted) setIsLoading(false);
+        return;
       }
+      setEntries(entriesResult.data ?? []);
+      setBarbers(barbersResult.data ?? []);
+    } catch {
+      if (!opts?.silent) {
+        setErrorMessage("No pudimos cargar la lista de espera.");
+      }
+    } finally {
+      if (!opts?.silent) setIsLoading(false);
     }
-    load();
-    return () => {
-      isMounted = false;
-    };
+  }
+
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  useEffect(() => {
+    void refresh();
+    // Polling silencioso cada 30s: si un cliente confirma desde /w/[token]
+    // y queda fulfilled, lo vemos sin tener que refrescar la página.
+    const intervalId = window.setInterval(() => {
+      void refresh({ silent: true });
+    }, 30_000);
+    return () => window.clearInterval(intervalId);
   }, [barbershop.slug]);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   const barberById = useMemo(() => {
     const map = new Map<string, BarberRow>();
@@ -217,9 +226,20 @@ export function AdminWaitlistManager({ barbershop }: AdminWaitlistManagerProps) 
             );
           })}
         </div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
-          {pendingCount} pendientes
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+            {pendingCount} pendientes
+          </p>
+          <button
+            type="button"
+            onClick={() => refresh()}
+            aria-label="Actualizar lista"
+            title="Actualizar"
+            className="inline-flex size-8 items-center justify-center rounded-[var(--radius-xs)] border border-[color:var(--border-default)] text-[color:var(--text-muted)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)]"
+          >
+            <RefreshCw className="size-3" />
+          </button>
+        </div>
       </section>
 
       {errorMessage ? (
