@@ -86,6 +86,10 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     [],
   );
   const [isLoadingTimes, setIsLoadingTimes] = useState(false);
+  const [showWaitlistForm, setShowWaitlistForm] = useState(false);
+  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+  const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false);
+  const [waitlistError, setWaitlistError] = useState("");
 
   // Resultado del booking exitoso: si está set, mostramos pantalla de éxito
   // (oculta el form) con detalle del turno + link de confirmación.
@@ -148,6 +152,49 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     setSelectedServiceId(serviceId);
     setSelectedTime("");
     setFormError("");
+  }
+
+  async function handleSubmitWaitlist() {
+    if (!selectedBarberId || !selectedService) {
+      setWaitlistError("Elegí barbero y servicio antes.");
+      return;
+    }
+    if (!clientName.trim() || !clientPhone.trim()) {
+      setWaitlistError("Necesitamos nombre y teléfono.");
+      return;
+    }
+    setWaitlistError("");
+    setIsSubmittingWaitlist(true);
+    try {
+      const response = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          barbershopSlug: barbershop.slug,
+          barberId: selectedBarberId,
+          serviceName: selectedService.name,
+          serviceDurationMinutes: selectedService.durationMinutes,
+          customerName: clientName.trim(),
+          customerPhone: clientPhone.trim(),
+          customerEmail: clientEmail.trim() || null,
+          preferredDate: selectedDate,
+          notes: comment.trim() || null,
+        }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setWaitlistError(payload.error ?? "No pudimos guardarte.");
+        return;
+      }
+      setWaitlistSubmitted(true);
+      setShowWaitlistForm(false);
+    } catch {
+      setWaitlistError("No pudimos guardarte.");
+    } finally {
+      setIsSubmittingWaitlist(false);
+    }
   }
 
   function handleSlotSelect(slot: AvailabilitySlot) {
@@ -547,6 +594,98 @@ export function BookingForm({ barbershop }: BookingFormProps) {
   }
 
   return (
+    <>
+      {waitlistSubmitted ? (
+        <div
+          role="status"
+          className="mb-6 rounded-[var(--radius-md)] border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] p-4"
+        >
+          <p className="text-sm font-bold text-[color:var(--success)]">
+            ✓ Te anotamos en la lista de espera
+          </p>
+          <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
+            Si se libera un horario para {selectedDate}, te avisamos por
+            WhatsApp.
+          </p>
+        </div>
+      ) : null}
+
+      {showWaitlistForm ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setShowWaitlistForm(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-[var(--radius-md)] border border-[color:var(--brand-gold)]/30 bg-[color:var(--surface-1)] p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--brand-gold)]">
+              Lista de espera
+            </p>
+            <h3 className="mt-3 text-2xl font-black uppercase text-white">
+              Anotarte
+            </h3>
+            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
+              Si se libera un slot el {selectedDate} con tu barbero, te
+              avisamos por WhatsApp para que confirmes.
+            </p>
+            <div className="mt-4 grid gap-2 rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-black p-3 text-xs text-[color:var(--text-secondary)]">
+              <p>
+                <span className="text-[color:var(--text-muted)]">
+                  Servicio:
+                </span>{" "}
+                {selectedService?.name ?? "—"}
+              </p>
+              <p>
+                <span className="text-[color:var(--text-muted)]">
+                  Barbero:
+                </span>{" "}
+                {selectedBarberName}
+              </p>
+              <p>
+                <span className="text-[color:var(--text-muted)]">Fecha:</span>{" "}
+                {selectedDate}
+              </p>
+              <p>
+                <span className="text-[color:var(--text-muted)]">Nombre:</span>{" "}
+                {clientName.trim() || "—"}
+              </p>
+              <p>
+                <span className="text-[color:var(--text-muted)]">
+                  Teléfono:
+                </span>{" "}
+                {clientPhone.trim() || "—"}
+              </p>
+            </div>
+            {waitlistError ? (
+              <p className="mt-3 border-l-2 border-[color:var(--danger)] pl-3 text-xs font-semibold text-[color:var(--danger)]">
+                {waitlistError}
+              </p>
+            ) : null}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowWaitlistForm(false)}
+                disabled={isSubmittingWaitlist}
+                className="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-[color:var(--border-default)] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitWaitlist}
+                disabled={isSubmittingWaitlist}
+                className="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] bg-[color:var(--brand-gold)] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-black transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-hi)] disabled:opacity-50"
+              >
+                {isSubmittingWaitlist ? "Guardando…" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     <form
       onSubmit={handleSubmit}
       className="grid gap-10 pb-32 sm:gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-20 lg:pb-0"
@@ -670,9 +809,18 @@ export function BookingForm({ barbershop }: BookingFormProps) {
                 Elegí un servicio para ver los horarios disponibles.
               </p>
             ) : availabilitySlots.length === 0 && !isLoadingTimes ? (
-              <p className="mt-4 text-xs text-[color:var(--text-muted)]">
-                No hay horarios disponibles para esta fecha.
-              </p>
+              <div className="mt-4 grid gap-3">
+                <p className="text-xs text-[color:var(--text-muted)]">
+                  No hay horarios disponibles para esta fecha.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowWaitlistForm(true)}
+                  className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[color:var(--brand-gold)]/40 bg-[color:var(--brand-gold-soft)] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--brand-gold)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-soft)]/80"
+                >
+                  Anotarme en lista de espera
+                </button>
+              </div>
             ) : (
               <>
                 <div
@@ -882,6 +1030,7 @@ export function BookingForm({ barbershop }: BookingFormProps) {
         </div>
       </div>
     </form>
+    </>
   );
 }
 

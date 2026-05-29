@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   CalendarDays,
+  Clock,
   Contact,
   ExternalLink,
   Image as ImageIcon,
@@ -61,6 +62,11 @@ export function AdminSidebar({
       label: "Recordatorios",
       href: `/${barbershopSlug}/admin/recordatorios`,
       icon: Bell,
+    },
+    {
+      label: "Lista de espera",
+      href: `/${barbershopSlug}/admin/lista-espera`,
+      icon: Clock,
     },
     {
       label: "Reportes",

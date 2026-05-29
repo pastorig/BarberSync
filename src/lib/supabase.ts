@@ -241,6 +241,45 @@ type BarbershopGalleryPhotoUpdate = {
   deleted_at?: string | null;
 };
 
+type WaitlistEntryRow = {
+  id: string;
+  created_at: string;
+  barbershop_slug: string;
+  barber_id: string;
+  service_name: string;
+  service_duration_minutes: number;
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string | null;
+  preferred_date: string;
+  preferred_time_from: string | null;
+  preferred_time_to: string | null;
+  notes: string | null;
+  status: "pending" | "contacted" | "fulfilled" | "cancelled";
+  resolved_at: string | null;
+  deleted_at: string | null;
+};
+
+type WaitlistEntryInsert = {
+  barbershop_slug: string;
+  barber_id: string;
+  service_name: string;
+  service_duration_minutes: number;
+  customer_name: string;
+  customer_phone: string;
+  customer_email?: string | null;
+  preferred_date: string;
+  preferred_time_from?: string | null;
+  preferred_time_to?: string | null;
+  notes?: string | null;
+  status?: "pending" | "contacted" | "fulfilled" | "cancelled";
+};
+
+type WaitlistEntryUpdate = Partial<WaitlistEntryInsert> & {
+  resolved_at?: string | null;
+  deleted_at?: string | null;
+};
+
 type ReminderLogRow = {
   id: string;
   appointment_id: string;
@@ -341,6 +380,12 @@ type Database = {
         Row: ReminderLogRow;
         Insert: ReminderLogInsert;
         Update: ReminderLogUpdate;
+        Relationships: [];
+      };
+      waitlist_entries: {
+        Row: WaitlistEntryRow;
+        Insert: WaitlistEntryInsert;
+        Update: WaitlistEntryUpdate;
         Relationships: [];
       };
       barber_weekly_schedules: {
@@ -481,6 +526,9 @@ export type {
   BarbershopClientInsert,
   BarbershopClientRow,
   BarbershopClientUpdate,
+  WaitlistEntryInsert,
+  WaitlistEntryRow,
+  WaitlistEntryUpdate,
   BarbershopRow,
   BarbershopUpdate,
   PlatformOwnerInsert,
