@@ -12,6 +12,11 @@ type AdminSettingsPageProps = {
   }>;
 };
 
+// Render dinámico siempre: la página de Settings refleja config viva de la
+// barbería. Si la dejamos estática, se queda con el snapshot de build y
+// los cambios no aparecen hasta el siguiente deploy.
+export const dynamic = "force-dynamic";
+
 export async function generateStaticParams() {
   const { data } = await listKnownBarbershops();
 
