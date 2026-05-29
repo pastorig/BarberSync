@@ -7,7 +7,17 @@ on:
   schedule:
     - cron: "5 * * * *"
   # También permite ejecución manual desde la UI de GitHub Actions.
+  # Con force=true ignora la ventana horaria (útil para testing).
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force mode: ignora la ventana horaria 17-20 ART"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
   trigger-reminders:
@@ -16,11 +26,16 @@ jobs:
       - name: Call /api/cron/reminders
         run: |
           # -L: sigue redirects (308 → URL final) reenviando los headers.
+          QUERY=""
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            QUERY="?force=true"
+          fi
+          echo "Calling with query: ${QUERY:-<none>}"
           response=$(curl -s -L --post301 --post302 --post303 \
             -o /tmp/cron-body -w "%{http_code}" \
             -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.CRON_BASE_URL }}/api/cron/reminders")
+            "${{ secrets.CRON_BASE_URL }}/api/cron/reminders${QUERY}")
           echo "HTTP $response"
           cat /tmp/cron-body
           if [ "$response" -ne 200 ]; then

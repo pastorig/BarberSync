@@ -193,6 +193,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
+  // ?force=true → ignora la ventana horaria (útil para testing).
+  const url = new URL(request.url);
+  const forceMode = url.searchParams.get("force") === "true";
+
   const argParts = getArgParts();
   const currentHour = argParts.hour;
   const todayYmd = argParts.ymdToday;
@@ -279,10 +283,11 @@ export async function GET(request: Request) {
 
     // ── Reminder 24h ──────────────────────────────────────────────
     const isTomorrow = apptDate === tomorrowYmd;
+    const reminderInWindow =
+      forceMode || (currentHour >= 17 && currentHour <= 20);
     if (
       isTomorrow &&
-      currentHour >= 17 &&
-      currentHour <= 20 &&
+      reminderInWindow &&
       !sentKinds.has("reminder_24h")
     ) {
       const ok = await sendOne(appointment, "reminder_24h");
@@ -295,12 +300,13 @@ export async function GET(request: Request) {
     if (isToday && !sentKinds.has("confirmation")) {
       // Ventana 2-4hs antes del turno, entre 9 y 21 hs.
       const hoursUntil = apptHour - currentHour;
-      const inWindow =
-        hoursUntil >= 2 &&
-        hoursUntil <= 4 &&
-        currentHour >= 9 &&
-        currentHour <= 21;
-      if (inWindow) {
+      const confirmationInWindow =
+        forceMode ||
+        (hoursUntil >= 2 &&
+          hoursUntil <= 4 &&
+          currentHour >= 9 &&
+          currentHour <= 21);
+      if (confirmationInWindow) {
         const ok = await sendOne(appointment, "confirmation");
         decisions.push({
           appointmentId: appointment.id,
@@ -311,11 +317,12 @@ export async function GET(request: Request) {
       }
     }
     // Turnos muy temprano (antes de 11am) → confirmación la noche anterior.
+    const earlyConfirmInWindow =
+      forceMode || (currentHour >= 19 && currentHour <= 20);
     if (
       isTomorrow &&
       apptHour < 11 &&
-      currentHour >= 19 &&
-      currentHour <= 20 &&
+      earlyConfirmInWindow &&
       !sentKinds.has("confirmation")
     ) {
       const ok = await sendOne(appointment, "confirmation");
@@ -404,6 +411,7 @@ export async function GET(request: Request) {
     argentinaHour: currentHour,
     argentinaToday: todayYmd,
     argentinaTomorrow: tomorrowYmd,
+    forceMode,
     scanned: appointments?.length ?? 0,
     decisions,
   });
