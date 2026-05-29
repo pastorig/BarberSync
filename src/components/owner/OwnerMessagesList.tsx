@@ -1,22 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, MessageCircle, RotateCcw } from "lucide-react";
+import { CheckCircle2, MessageCircle, RotateCcw, Trash2, X } from "lucide-react";
 import { getCurrentSession } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import {
+  hardDeleteContactRequest,
   listContactRequests,
   markContactRequestHandled,
+  restoreContactRequest,
+  softDeleteContactRequest,
   unmarkContactRequestHandled,
 } from "@/lib/contact-requests";
 import type { ContactRequestRow } from "@/lib/supabase";
 
-type Filter = "pending" | "handled" | "all";
+type Filter = "pending" | "handled" | "all" | "deleted";
 
 const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
   { value: "pending", label: "Pendientes" },
   { value: "handled", label: "Atendidos" },
   { value: "all", label: "Todos" },
+  { value: "deleted", label: "Eliminados" },
 ];
 
 function formatDate(iso: string): string {
@@ -110,13 +114,76 @@ export function OwnerMessagesList() {
     }
   }
 
+  async function handleSoftDelete(request: ContactRequestRow) {
+    setUpdatingId(request.id);
+    setErrorMessage("");
+    try {
+      const { data, error } = await softDeleteContactRequest(request.id);
+      if (error || !data) {
+        setErrorMessage("No pudimos eliminar el mensaje.");
+        return;
+      }
+      setRequests((current) =>
+        current.map((r) => (r.id === request.id ? data : r)),
+      );
+    } catch {
+      setErrorMessage("No pudimos eliminar el mensaje.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function handleRestore(request: ContactRequestRow) {
+    setUpdatingId(request.id);
+    setErrorMessage("");
+    try {
+      const { data, error } = await restoreContactRequest(request.id);
+      if (error || !data) {
+        setErrorMessage("No pudimos restaurar el mensaje.");
+        return;
+      }
+      setRequests((current) =>
+        current.map((r) => (r.id === request.id ? data : r)),
+      );
+    } catch {
+      setErrorMessage("No pudimos restaurar el mensaje.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function handleHardDelete(request: ContactRequestRow) {
+    const ok = window.confirm(
+      "¿Eliminar este mensaje definitivamente? No se puede deshacer.",
+    );
+    if (!ok) return;
+    setUpdatingId(request.id);
+    setErrorMessage("");
+    try {
+      const { error } = await hardDeleteContactRequest(request.id);
+      if (error) {
+        setErrorMessage("No pudimos eliminar el mensaje definitivamente.");
+        return;
+      }
+      setRequests((current) => current.filter((r) => r.id !== request.id));
+    } catch {
+      setErrorMessage("No pudimos eliminar el mensaje definitivamente.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
   const visibleRequests = requests.filter((request) => {
+    if (filter === "deleted") return request.deleted_at !== null;
+    if (request.deleted_at !== null) return false;
     if (filter === "all") return true;
     if (filter === "pending") return request.handled_at === null;
     return request.handled_at !== null;
   });
 
-  const pendingCount = requests.filter((r) => r.handled_at === null).length;
+  const pendingCount = requests.filter(
+    (r) => r.handled_at === null && r.deleted_at === null,
+  ).length;
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -185,18 +252,35 @@ export function OwnerMessagesList() {
         <ul className="grid gap-3">
           {visibleRequests.map((request) => {
             const isHandled = request.handled_at !== null;
+            const isDeleted = request.deleted_at !== null;
             const isBusy = updatingId === request.id;
             return (
               <li
                 key={request.id}
                 className={cn(
-                  "rounded-[var(--radius-md)] border bg-[color:var(--surface-1)] p-5",
-                  isHandled
-                    ? "border-[color:var(--border-subtle)] opacity-60"
-                    : "border-[color:var(--brand-gold)]/30",
+                  "relative rounded-[var(--radius-md)] border bg-[color:var(--surface-1)] p-5",
+                  isDeleted
+                    ? "border-[color:var(--border-subtle)] opacity-50"
+                    : isHandled
+                      ? "border-[color:var(--border-subtle)] opacity-60"
+                      : "border-[color:var(--brand-gold)]/30",
                 )}
               >
-                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                {/* X para eliminar (solo en mensajes no eliminados) */}
+                {!isDeleted ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSoftDelete(request)}
+                    disabled={isBusy}
+                    aria-label="Eliminar mensaje"
+                    title="Eliminar"
+                    className="absolute right-3 top-3 inline-flex size-7 items-center justify-center rounded-full border border-[color:var(--border-subtle)] text-[color:var(--text-muted)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--danger)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                ) : null}
+
+                <div className="flex flex-wrap items-baseline justify-between gap-3 pr-10">
                   <div className="min-w-0">
                     <p className="text-base font-bold text-white">
                       {request.name}
@@ -205,7 +289,11 @@ export function OwnerMessagesList() {
                       {formatDate(request.created_at)}
                     </p>
                   </div>
-                  {isHandled ? (
+                  {isDeleted ? (
+                    <span className="inline-flex items-center rounded-[var(--radius-xs)] border border-[color:var(--border-default)] bg-black/40 px-2 py-1 text-[10px] font-bold uppercase text-[color:var(--text-subtle)]">
+                      Eliminado
+                    </span>
+                  ) : isHandled ? (
                     <span className="inline-flex items-center gap-1 rounded-[var(--radius-xs)] border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] px-2 py-1 text-[10px] font-bold uppercase text-[color:var(--success)]">
                       <CheckCircle2 className="size-3" />
                       Atendido
@@ -241,8 +329,29 @@ export function OwnerMessagesList() {
                       {request.phone}
                     </a>
                   ) : null}
-                  <span className="ml-auto">
-                    {isHandled ? (
+                  <span className="ml-auto inline-flex flex-wrap items-center gap-2">
+                    {isDeleted ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleRestore(request)}
+                          disabled={isBusy}
+                          className="inline-flex min-h-8 items-center gap-1 rounded-[var(--radius-xs)] border border-[color:var(--border-default)] px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <RotateCcw className="size-3" />
+                          Restaurar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleHardDelete(request)}
+                          disabled={isBusy}
+                          className="inline-flex min-h-8 items-center gap-1 rounded-[var(--radius-xs)] border border-[color:var(--danger)]/40 bg-[color:var(--danger-soft)] px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--danger)] transition-colors duration-[var(--duration-fast)] hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Trash2 className="size-3" />
+                          Eliminar definitivo
+                        </button>
+                      </>
+                    ) : isHandled ? (
                       <button
                         type="button"
                         onClick={() => handleUnmark(request)}

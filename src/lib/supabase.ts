@@ -311,6 +311,7 @@ type ContactRequestRow = {
   source: string;
   handled_at: string | null;
   handled_by: string | null;
+  deleted_at: string | null;
 };
 
 type ContactRequestInsert = {
@@ -324,6 +325,7 @@ type ContactRequestInsert = {
 type ContactRequestUpdate = {
   handled_at?: string | null;
   handled_by?: string | null;
+  deleted_at?: string | null;
 };
 
 type Database = {
