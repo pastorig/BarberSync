@@ -25,6 +25,7 @@ type ActionHandlers = {
   onCancel?: (appointment: AppointmentData) => void;
   onRestore?: (appointment: AppointmentData) => void;
   onDelete?: (appointment: AppointmentData) => void;
+  onHardDelete?: (appointment: AppointmentData) => void;
   onAdjustActualDuration?: (
     appointment: AppointmentData,
     nextDurationMinutes: number | null,
@@ -36,6 +37,7 @@ type PendingState = {
   cancellingId?: string | null;
   restoringId?: string | null;
   deletingId?: string | null;
+  hardDeletingId?: string | null;
   updatingDurationId?: string | null;
 };
 
@@ -111,11 +113,13 @@ export function AppointmentRow({
   onCancel,
   onRestore,
   onDelete,
+  onHardDelete,
   onAdjustActualDuration,
   confirmingId,
   cancellingId,
   restoringId,
   deletingId,
+  hardDeletingId,
   updatingDurationId,
   dayClosingMinutes,
   overtimeAccepted,
@@ -134,6 +138,7 @@ export function AppointmentRow({
     cancellingId === appointment.id ||
     restoringId === appointment.id ||
     deletingId === appointment.id ||
+    hardDeletingId === appointment.id ||
     updatingDurationId === appointment.id;
   const baseDurationMinutes = appointment.service_duration_minutes;
   const actualDurationMinutes = appointment.actual_duration_minutes;
@@ -160,7 +165,19 @@ export function AppointmentRow({
     Boolean(onAdjustActualDuration);
 
   return (
-    <li className="group rounded-[var(--radius-sm)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--border-default)]">
+    <li className="group relative rounded-[var(--radius-sm)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--border-default)]">
+      {isDeleted && onHardDelete ? (
+        <button
+          type="button"
+          onClick={() => onHardDelete(appointment)}
+          disabled={isBusy}
+          aria-label="Eliminar definitivamente"
+          title="Eliminar definitivamente"
+          className="absolute right-2 top-2 z-10 inline-flex size-7 items-center justify-center rounded-[var(--radius-xs)] text-[color:var(--text-subtle)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--danger-soft)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      ) : null}
       <div className="flex items-stretch gap-3 p-3 sm:gap-4 sm:p-4">
         <div className="flex w-14 shrink-0 flex-col items-start justify-center sm:w-16">
           <span className="font-mono text-lg font-black tabular-nums leading-none text-white sm:text-xl">
@@ -194,14 +211,16 @@ export function AppointmentRow({
                 </span>
               ))}
             </div>
-            <span
-              className={cn(
-                "inline-flex shrink-0 items-center rounded-[var(--radius-xs)] border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em]",
-                meta.pillClasses,
-              )}
-            >
-              {meta.label}
-            </span>
+            {isDeleted && onHardDelete ? null : (
+              <span
+                className={cn(
+                  "inline-flex shrink-0 items-center rounded-[var(--radius-xs)] border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em]",
+                  meta.pillClasses,
+                )}
+              >
+                {meta.label}
+              </span>
+            )}
           </div>
           <p className="mt-1 truncate text-xs text-[color:var(--text-secondary)] sm:text-sm">
             {appointment.service_name}
