@@ -11,6 +11,7 @@ import {
   restoreDeletedAppointment,
   updateAppointmentActualDuration,
 } from "@/lib/appointments";
+import { getCurrentSession } from "@/lib/auth";
 import { listActiveServicesByBarbershop } from "@/lib/barber-services";
 import { listBarbersByBarbershop } from "@/lib/barbers";
 import {
@@ -91,6 +92,9 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     string | null
   >(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<
+    string | null
+  >(null);
+  const [hardDeletingAppointmentId, setHardDeletingAppointmentId] = useState<
     string | null
   >(null);
   const [restoringAppointmentId, setRestoringAppointmentId] = useState<
@@ -609,6 +613,49 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     }
   }
 
+  async function handleHardDeleteAppointment(appointment: AppointmentRow) {
+    if (!appointment.id) {
+      setErrorMessage("No pudimos identificar la reserva.");
+      return;
+    }
+    const ok = window.confirm(
+      `Borrar definitivamente el turno de ${appointment.customer_name}? Esta acción no se puede deshacer.`,
+    );
+    if (!ok) return;
+    setErrorMessage("");
+    setHardDeletingAppointmentId(appointment.id);
+    try {
+      const { data: sessionData } = await getCurrentSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setErrorMessage("Tu sesión expiró, volvé a iniciar sesión.");
+        return;
+      }
+      const response = await fetch("/api/admin/appointments", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          appointmentId: appointment.id,
+          barbershopSlug: barbershop.slug,
+        }),
+      });
+      if (!response.ok) {
+        setErrorMessage("No pudimos borrar definitivamente la reserva.");
+        return;
+      }
+      setAppointments((current) =>
+        current.filter((a) => a.id !== appointment.id),
+      );
+    } catch {
+      setErrorMessage("No pudimos borrar definitivamente la reserva.");
+    } finally {
+      setHardDeletingAppointmentId(null);
+    }
+  }
+
   async function handleRestoreAppointment(appointment: AppointmentRow) {
     if (!appointment.id) {
       setErrorMessage("No pudimos identificar la reserva.");
@@ -1109,10 +1156,12 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       onCancel={handleCancelAppointment}
                       onRestore={handleRestoreAppointment}
                       onDelete={handleDeleteAppointment}
+                      onHardDelete={handleHardDeleteAppointment}
                       confirmingId={confirmingAppointmentId}
                       cancellingId={cancellingAppointmentId}
                       restoringId={restoringAppointmentId}
                       deletingId={deletingAppointmentId}
+                      hardDeletingId={hardDeletingAppointmentId}
                       updatingDurationId={updatingDurationAppointmentId}
                       onAdjustActualDuration={handleAdjustActualDuration}
                       scheduleProjection={scheduleProjection}
