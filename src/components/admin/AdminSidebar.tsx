@@ -16,6 +16,7 @@ import {
   Plus,
   Settings,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 import { Logo } from "@/components/ui";
@@ -65,6 +66,11 @@ export function AdminSidebar({
       label: "Reportes",
       href: `/${barbershopSlug}/admin/reportes`,
       icon: LineChart,
+    },
+    {
+      label: "Cierre de caja",
+      href: `/${barbershopSlug}/admin/cierre`,
+      icon: Wallet,
     },
     {
       label: "Barberos",
