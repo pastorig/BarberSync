@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X } from "lucide-react";
+import { CalendarClock, Check, X } from "lucide-react";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
@@ -14,6 +14,7 @@ import {
   formatPrice,
   normalizeTimeValue,
 } from "@/lib/format";
+import { AppointmentRescheduleDrawer } from "./AppointmentRescheduleDrawer";
 
 type AppointmentActionPanelProps = {
   token: string;
@@ -36,6 +37,8 @@ export function AppointmentActionPanel({
   const [appointment, setAppointment] = useState(initialAppointment);
   const [actionState, setActionState] = useState<ActionState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleSuccess, setRescheduleSuccess] = useState(false);
 
   const status = appointment.status;
   const isPending = status === "pending";
@@ -89,6 +92,30 @@ export function AppointmentActionPanel({
     setActionState("idle");
   }
 
+  // Vista de reagendar (reemplaza el detalle mientras el cliente elige).
+  if (isRescheduling) {
+    return (
+      <article className="animate-fade-up">
+        <AppointmentRescheduleDrawer
+          token={token}
+          currentDate={appointment.appointment_date}
+          currentTime={appointment.appointment_time}
+          onCancel={() => setIsRescheduling(false)}
+          onSuccess={(newDate, newTime) => {
+            setAppointment((current) => ({
+              ...current,
+              appointment_date: newDate,
+              appointment_time: newTime,
+              status: "pending",
+            }));
+            setIsRescheduling(false);
+            setRescheduleSuccess(true);
+          }}
+        />
+      </article>
+    );
+  }
+
   return (
     <article className="animate-fade-up">
       <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-[color:var(--brand-gold)]">
@@ -137,29 +164,48 @@ export function AppointmentActionPanel({
         {showActions ? (
           // ── Modo activo: cliente decide (viene del WA del admin) ──
           isPending ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
+              {rescheduleSuccess ? (
+                <p className="border-l-2 border-[color:var(--success)] pl-3 text-sm font-semibold text-[color:var(--success)]">
+                  Reagendamos tu turno. Espera la confirmación de{" "}
+                  {appointment.barbershop_name}.
+                </p>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  size="lg"
+                  fullWidth
+                  loading={actionState === "confirming"}
+                  disabled={actionState !== "idle"}
+                  onClick={handleConfirm}
+                  iconLeft={<Check className="size-4" />}
+                >
+                  Confirmar turno
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="lg"
+                  fullWidth
+                  loading={actionState === "cancelling"}
+                  disabled={actionState !== "idle"}
+                  onClick={handleCancel}
+                  iconLeft={<X className="size-4" />}
+                >
+                  No puedo asistir
+                </Button>
+              </div>
               <Button
                 type="button"
-                size="lg"
+                variant="secondary"
+                size="md"
                 fullWidth
-                loading={actionState === "confirming"}
                 disabled={actionState !== "idle"}
-                onClick={handleConfirm}
-                iconLeft={<Check className="size-4" />}
+                onClick={() => setIsRescheduling(true)}
+                iconLeft={<CalendarClock className="size-4" />}
               >
-                Confirmar turno
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                size="lg"
-                fullWidth
-                loading={actionState === "cancelling"}
-                disabled={actionState !== "idle"}
-                onClick={handleCancel}
-                iconLeft={<X className="size-4" />}
-              >
-                No puedo asistir
+                Reagendar para otro día
               </Button>
             </div>
           ) : isConfirmed ? (
@@ -168,17 +214,29 @@ export function AppointmentActionPanel({
                 Gracias por confirmar. Te esperamos en{" "}
                 {appointment.barbershop_name}.
               </p>
-              <Button
-                type="button"
-                variant="danger"
-                size="md"
-                loading={actionState === "cancelling"}
-                disabled={actionState !== "idle"}
-                onClick={handleCancel}
-                iconLeft={<X className="size-3.5" />}
-              >
-                Cancelar este turno
-              </Button>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  disabled={actionState !== "idle"}
+                  onClick={() => setIsRescheduling(true)}
+                  iconLeft={<CalendarClock className="size-3.5" />}
+                >
+                  Reagendar
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="md"
+                  loading={actionState === "cancelling"}
+                  disabled={actionState !== "idle"}
+                  onClick={handleCancel}
+                  iconLeft={<X className="size-3.5" />}
+                >
+                  Cancelar turno
+                </Button>
+              </div>
             </div>
           ) : isCancelled ? (
             <p className="text-sm text-[color:var(--text-secondary)]">
