@@ -168,6 +168,7 @@ export async function PATCH(request: Request) {
       whatsapp: asTrimmedOrNull(payload.whatsapp),
       instagram: asTrimmedOrNull(payload.instagram),
       address: asTrimmedOrNull(payload.address),
+      google_reviews_url: asTrimmedOrNull(payload.googleReviewsUrl),
       working_hours_start: startTime,
       working_hours_end: endTime,
       slot_interval_minutes: intervalValue,
