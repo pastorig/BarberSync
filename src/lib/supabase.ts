@@ -258,6 +258,7 @@ type WaitlistEntryRow = {
   status: "pending" | "contacted" | "fulfilled" | "cancelled";
   resolved_at: string | null;
   deleted_at: string | null;
+  confirmation_token: string;
 };
 
 type WaitlistEntryInsert = {

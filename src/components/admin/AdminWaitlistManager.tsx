@@ -166,14 +166,17 @@ export function AdminWaitlistManager({ barbershop }: AdminWaitlistManagerProps) 
       barberById.get(entry.barber_id)?.display_name ??
       barberById.get(entry.barber_id)?.name ??
       "tu barbero";
+    const siteUrl =
+      typeof window !== "undefined" ? window.location.origin : "";
+    const confirmUrl = `${siteUrl}/w/${entry.confirmation_token}`;
     const lines = [
       `Hola ${entry.customer_name}!`,
       `Te escribimos de ${barbershop.name}.`,
       "",
-      `Te avisamos que se liberó un horario para ${entry.service_name} con ${barberName}.`,
-      `Fecha pedida: ${formatDateForDisplay(entry.preferred_date)}.`,
+      `Se liberó un horario para ${entry.service_name} con ${barberName}.`,
       "",
-      "Si todavía estás interesado, respondenos para confirmar el turno.",
+      "Elegí día y hora para confirmar tu turno con un click:",
+      confirmUrl,
     ];
     return `https://wa.me/${digits}?text=${encodeURIComponent(lines.join("\n"))}`;
   }

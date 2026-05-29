@@ -1,7 +1,7 @@
 import { getSupabaseClient, type WaitlistEntryRow } from "@/lib/supabase";
 
 const waitlistSelect =
-  "id, created_at, barbershop_slug, barber_id, service_name, service_duration_minutes, customer_name, customer_phone, customer_email, preferred_date, preferred_time_from, preferred_time_to, notes, status, resolved_at, deleted_at";
+  "id, created_at, barbershop_slug, barber_id, service_name, service_duration_minutes, customer_name, customer_phone, customer_email, preferred_date, preferred_time_from, preferred_time_to, notes, status, resolved_at, deleted_at, confirmation_token";
 
 export async function listWaitlistByBarbershop(barbershopSlug: string) {
   return getSupabaseClient()
