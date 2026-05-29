@@ -169,6 +169,151 @@ export function AdminCierreCajaManager({
     return Array.from(map.values()).sort((a, b) => b.cobrado - a.cobrado);
   }, [dayAppointments]);
 
+  async function handleExportPdf() {
+    // Dynamic import para no engordar el bundle inicial.
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
+
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const margin = 40;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const dateLabel = isToday
+      ? `Hoy · ${formatDateForDisplay(selectedDate)}`
+      : formatDateForDisplay(selectedDate);
+
+    // Header
+    doc.setTextColor(201, 162, 62); // gold
+    doc.setFontSize(10);
+    doc.text("BARBERSYNC · CIERRE DE CAJA", margin, margin);
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text(barbershop.name, margin, margin + 24);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(dateLabel, margin, margin + 44);
+
+    // KPIs
+    const kpiY = margin + 70;
+    const kpiBoxW = (pageWidth - margin * 2 - 24) / 4;
+    const kpis = [
+      { label: "Cobrado real", value: formatPrice(stats.totalCobrado) },
+      { label: "Potencial", value: formatPrice(stats.totalPotencial) },
+      {
+        label: "Ticket prom.",
+        value: formatPrice(Math.round(stats.ticketPromedio)),
+      },
+      { label: "Confirmados", value: String(stats.turnosConfirmados) },
+    ];
+    kpis.forEach((kpi, index) => {
+      const x = margin + index * (kpiBoxW + 8);
+      doc.setDrawColor(220, 220, 220);
+      doc.setFillColor(248, 248, 248);
+      doc.roundedRect(x, kpiY, kpiBoxW, 56, 4, 4, "FD");
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      doc.text(kpi.label.toUpperCase(), x + 8, kpiY + 14);
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text(kpi.value, x + 8, kpiY + 38);
+      doc.setFont("helvetica", "normal");
+    });
+
+    let cursorY = kpiY + 80;
+
+    // Producción por barbero
+    if (byBarber.length > 0) {
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text("Producción por barbero", margin, cursorY);
+      cursorY += 10;
+      autoTable(doc, {
+        startY: cursorY,
+        margin: { left: margin, right: margin },
+        head: [["Barbero", "Confirmados", "Pendientes", "Cobrado"]],
+        body: byBarber.map((row) => [
+          row.name,
+          String(row.confirmados),
+          String(row.pendientes),
+          formatPrice(row.cobrado),
+        ]),
+        styles: { fontSize: 9, cellPadding: 6 },
+        headStyles: {
+          fillColor: [40, 40, 40],
+          textColor: [201, 162, 62],
+          fontStyle: "bold",
+        },
+        columnStyles: {
+          1: { halign: "right" },
+          2: { halign: "right" },
+          3: { halign: "right", fontStyle: "bold" },
+        },
+      });
+      cursorY =
+        (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
+          .finalY + 24;
+    }
+
+    // Detalle
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Detalle (${dayAppointments.length})`, margin, cursorY);
+    cursorY += 10;
+    if (dayAppointments.length === 0) {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(120, 120, 120);
+      doc.text("Sin turnos este día.", margin, cursorY + 14);
+    } else {
+      autoTable(doc, {
+        startY: cursorY,
+        margin: { left: margin, right: margin },
+        head: [["Hora", "Cliente", "Servicio", "Barbero", "Estado", "Precio"]],
+        body: dayAppointments.map((appointment) => [
+          normalizeTimeValue(appointment.appointment_time),
+          appointment.customer_name,
+          appointment.service_name,
+          appointment.barber_name,
+          appointment.status === "confirmed"
+            ? "Cobrado"
+            : appointment.status === "cancelled"
+              ? "Cancelado"
+              : "Pendiente",
+          formatPrice(appointment.service_price ?? 0),
+        ]),
+        styles: { fontSize: 8, cellPadding: 5 },
+        headStyles: {
+          fillColor: [40, 40, 40],
+          textColor: [201, 162, 62],
+          fontStyle: "bold",
+        },
+        columnStyles: {
+          0: { halign: "center", cellWidth: 50 },
+          5: { halign: "right", fontStyle: "bold" },
+        },
+      });
+    }
+
+    // Footer
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 140);
+      doc.text(
+        `BarberSync · ${barbershop.name} · ${dateLabel}  ·  Página ${i} de ${pageCount}`,
+        margin,
+        doc.internal.pageSize.getHeight() - 20,
+      );
+    }
+
+    doc.save(`cierre-caja-${barbershop.slug}-${selectedDate}.pdf`);
+  }
+
   function handleExportCsv() {
     const lines: string[] = [];
     lines.push(
@@ -269,15 +414,26 @@ export function AdminCierreCajaManager({
             </button>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={handleExportCsv}
-          disabled={dayAppointments.length === 0}
-          className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-sm)] border border-[color:var(--brand-gold)]/40 bg-[color:var(--brand-gold-soft)] px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--brand-gold)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-soft)]/80 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Download className="size-3" />
-          Exportar CSV
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            disabled={dayAppointments.length === 0}
+            className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-sm)] border border-[color:var(--brand-gold)]/40 bg-[color:var(--brand-gold-soft)] px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--brand-gold)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-soft)]/80 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="size-3" />
+            PDF
+          </button>
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={dayAppointments.length === 0}
+            className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-sm)] border border-[color:var(--border-default)] px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="size-3" />
+            CSV
+          </button>
+        </div>
       </section>
 
       {errorMessage ? (
