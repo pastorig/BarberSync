@@ -257,8 +257,11 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── Notificación al owner (no bloqueante) ──────────────────────────
-  void sendWaitlistOwnerNotification({
+  // ── Notificación al owner ──────────────────────────────────────────
+  // Awaiteado: en Vercel serverless las promesas no awaiteadas mueren
+  // cuando la función responde. Si falla, no rompemos la respuesta al
+  // cliente (try/catch interno).
+  await sendWaitlistOwnerNotification({
     supabase,
     barbershopSlug,
     barberId,
@@ -301,7 +304,13 @@ async function sendWaitlistOwnerNotification(
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL || "https://barber-sync-iota.vercel.app";
 
-  if (!resendApiKey || !ownerEmail) return;
+  if (!resendApiKey || !ownerEmail) {
+    console.log(
+      "[waitlist] skipping owner notification: missing RESEND_API_KEY or OWNER_NOTIFICATION_EMAIL",
+      { hasApiKey: Boolean(resendApiKey), hasOwnerEmail: Boolean(ownerEmail) },
+    );
+    return;
+  }
 
   try {
     const [barbershopResult, barberResult] = await Promise.all([
@@ -349,6 +358,11 @@ async function sendWaitlistOwnerNotification(
     if (result.error) {
       Sentry.captureException(result.error);
       console.error("[waitlist] resend error", result.error);
+    } else {
+      console.log(
+        "[waitlist] owner notification sent",
+        { ownerEmail, customerName: input.customerName, id: result.data?.id },
+      );
     }
   } catch (emailError) {
     Sentry.captureException(emailError);
