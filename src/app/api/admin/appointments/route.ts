@@ -36,6 +36,69 @@ async function assertAdminOfBarbershop(
   return { ok: true };
 }
 
+export async function PATCH(request: Request) {
+  let payload: Record<string, unknown>;
+  try {
+    payload = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Body inválido." }, { status: 400 });
+  }
+
+  const appointmentId =
+    typeof payload.appointmentId === "string" ? payload.appointmentId : "";
+  const barbershopSlug =
+    typeof payload.barbershopSlug === "string" ? payload.barbershopSlug : "";
+
+  if (!appointmentId || !barbershopSlug) {
+    return NextResponse.json(
+      { error: "Faltan parámetros." },
+      { status: 400 },
+    );
+  }
+
+  const auth = await assertAdminOfBarbershop(
+    request.headers.get("authorization"),
+    barbershopSlug,
+  );
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const updateValues: { internal_notes?: string | null } = {};
+
+  if ("internalNotes" in payload) {
+    const rawNotes =
+      typeof payload.internalNotes === "string" ? payload.internalNotes : "";
+    updateValues.internal_notes = rawNotes.trim() ? rawNotes.trim() : null;
+  }
+
+  if (Object.keys(updateValues).length === 0) {
+    return NextResponse.json(
+      { error: "Nada para actualizar." },
+      { status: 400 },
+    );
+  }
+
+  const supabaseAdmin = getSupabaseAdminClient();
+  const { data, error } = await supabaseAdmin
+    .from("appointments")
+    .update(updateValues)
+    .eq("id", appointmentId)
+    .eq("barbershop_slug", barbershopSlug)
+    .select("id, internal_notes")
+    .single();
+
+  if (error || !data) {
+    Sentry.captureException(error);
+    return NextResponse.json(
+      { error: "No pudimos actualizar el turno." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true, appointment: data });
+}
+
 export async function DELETE(request: Request) {
   let payload: Record<string, unknown>;
   try {

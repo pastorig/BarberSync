@@ -661,6 +661,44 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     }
   }
 
+  async function handleSaveInternalNotes(
+    appointment: AppointmentRow,
+    nextNotes: string,
+  ) {
+    if (!appointment.id) {
+      throw new Error("Sin id de appointment.");
+    }
+    const trimmed = nextNotes.trim();
+    const { data: sessionData } = await getCurrentSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      throw new Error("Sesión expirada.");
+    }
+    const response = await fetch("/api/admin/appointments", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        appointmentId: appointment.id,
+        barbershopSlug: barbershop.slug,
+        internalNotes: trimmed,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error("PATCH appointments failed");
+    }
+    // Optimistic update local
+    setAppointments((current) =>
+      current.map((a) =>
+        a.id === appointment.id
+          ? { ...a, internal_notes: trimmed || null }
+          : a,
+      ),
+    );
+  }
+
   async function handleHardDeleteAllDeleted() {
     const deletedAppointments = appointments.filter(
       (a) => a.status === "deleted",
@@ -1247,6 +1285,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       onRestore={handleRestoreAppointment}
                       onDelete={handleDeleteAppointment}
                       onHardDelete={handleHardDeleteAppointment}
+                      onSaveInternalNotes={handleSaveInternalNotes}
                       confirmingId={confirmingAppointmentId}
                       cancellingId={cancellingAppointmentId}
                       restoringId={restoringAppointmentId}
