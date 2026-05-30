@@ -6,14 +6,17 @@ import {
   Activity,
   ArrowDownAZ,
   ArrowUpRight,
+  ChevronDown,
   Clock3,
   ExternalLink,
   Key,
   MoreVertical,
+  Search,
   Sparkles,
   Trash2,
   Trophy,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { useConfirm } from "@/components/ui";
 import { getCurrentSession } from "@/lib/auth";
@@ -113,14 +116,39 @@ export function OwnerDashboard() {
     Record<string, { email: string; temporaryPassword: string }>
   >({});
   const [sortMode, setSortMode] = useState<SortMode>("activity");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
 
   const activeBarbershops = useMemo(
     () => metrics.barbershops.filter((b) => b.isActive),
     [metrics.barbershops],
   );
 
+  const inactiveBarbershops = useMemo(
+    () => metrics.barbershops.filter((b) => !b.isActive),
+    [metrics.barbershops],
+  );
+
+  // Normaliza para búsqueda accent-insensitive (José ~ Jose).
+  // ̀-ͯ cubre los combining diacritical marks de Unicode.
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "");
+
+  const normalizedSearch = useMemo(
+    () => normalize(searchQuery.trim()),
+    [searchQuery],
+  );
+
   const sortedActiveBarbershops = useMemo(() => {
-    const list = [...activeBarbershops];
+    const filtered = normalizedSearch
+      ? activeBarbershops.filter((b) =>
+          normalize(`${b.name} ${b.slug}`).includes(normalizedSearch),
+        )
+      : activeBarbershops;
+    const list = [...filtered];
     if (sortMode === "alpha") {
       list.sort((a, b) => a.name.localeCompare(b.name, "es"));
     } else if (sortMode === "historic") {
@@ -141,7 +169,7 @@ export function OwnerDashboard() {
       });
     }
     return list;
-  }, [activeBarbershops, sortMode]);
+  }, [activeBarbershops, sortMode, normalizedSearch]);
 
   useEffect(() => {
     let isMounted = true;
@@ -536,10 +564,25 @@ export function OwnerDashboard() {
                     Barberías activas
                   </p>
                   <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-                    {activeBarbershops.length}{" "}
-                    {activeBarbershops.length === 1
-                      ? "barbería operando"
-                      : "barberías operando"}
+                    {normalizedSearch ? (
+                      <>
+                        <span className="font-mono text-[color:var(--text-secondary)]">
+                          {sortedActiveBarbershops.length}
+                        </span>{" "}
+                        de{" "}
+                        <span className="font-mono">
+                          {activeBarbershops.length}
+                        </span>{" "}
+                        coinciden
+                      </>
+                    ) : (
+                      <>
+                        {activeBarbershops.length}{" "}
+                        {activeBarbershops.length === 1
+                          ? "barbería operando"
+                          : "barberías operando"}
+                      </>
+                    )}
                   </p>
                 </div>
 
@@ -577,6 +620,59 @@ export function OwnerDashboard() {
                   </div>
                 ) : null}
               </div>
+
+              {/* Buscador — aparece con 3+ activas para no estorbar en empty states */}
+              {activeBarbershops.length >= 3 ? (
+                <div className="relative mt-3">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--text-subtle)]"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="search"
+                    inputMode="search"
+                    autoComplete="off"
+                    placeholder="Buscar barbería por nombre o slug…"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    className="block w-full rounded-[var(--radius-sm)] border border-white/[0.06] bg-[color:var(--surface-1)] py-2.5 pl-9 pr-9 text-sm text-white placeholder:text-[color:var(--text-subtle)] focus:border-[color:var(--brand-gold)]/60 focus:outline-none focus:ring-0"
+                    aria-label="Buscar barbería"
+                  />
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      aria-label="Limpiar búsqueda"
+                      className="absolute right-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-[color:var(--text-muted)] transition-colors hover:bg-white/[0.04] hover:text-[color:var(--text-secondary)] press-shrink"
+                    >
+                      <X className="size-3.5" aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Empty state — búsqueda sin resultados */}
+              {normalizedSearch && sortedActiveBarbershops.length === 0 ? (
+                <div className="mt-3 flex flex-col items-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-white/[0.06] bg-[color:var(--surface-1)] px-4 py-8 text-center">
+                  <Search
+                    className="size-5 text-[color:var(--text-subtle)]"
+                    aria-hidden="true"
+                  />
+                  <p className="text-xs text-[color:var(--text-muted)]">
+                    No hay barberías que coincidan con{" "}
+                    <span className="font-mono text-[color:var(--text-secondary)]">
+                      “{searchQuery}”
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--brand-gold)] hover:underline"
+                  >
+                    Limpiar búsqueda
+                  </button>
+                </div>
+              ) : null}
 
               <div className="mt-3 grid gap-2.5">
                 {sortedActiveBarbershops
@@ -742,75 +838,92 @@ export function OwnerDashboard() {
               </div>
             </section>
 
-            {/* Sección Inactivas — solo aparece si hay barberías soft-deleted */}
-            {metrics.barbershops.some((b) => !b.isActive) ? (
-              <section className="mt-5 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-3 shadow-xl shadow-black/20 sm:mt-8 sm:p-5">
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase text-[color:var(--text-subtle)]">
+            {/* Sección Inactivas — colapsable, closed por default para reducir ruido */}
+            {inactiveBarbershops.length > 0 ? (
+              <section className="mt-5 overflow-hidden rounded-[var(--radius-md)] border border-white/[0.06] bg-[color:var(--surface-1)] sm:mt-8">
+                <button
+                  type="button"
+                  onClick={() => setShowInactive((v) => !v)}
+                  aria-expanded={showInactive}
+                  aria-controls="inactive-barbershops-list"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-[var(--duration-fast)] hover:bg-white/[0.02] sm:px-5"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-subtle)]">
                       Soft-deleted
                     </p>
-                    <h2 className="mt-1 text-2xl font-black text-[color:var(--text-secondary)]">
+                    <p className="mt-0.5 text-sm font-bold text-[color:var(--text-secondary)]">
                       Barberías inactivas
-                    </h2>
-                    <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                      <span className="ml-2 font-mono text-xs text-[color:var(--text-muted)]">
+                        ({inactiveBarbershops.length})
+                      </span>
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      "size-5 shrink-0 text-[color:var(--text-muted)] transition-transform duration-[var(--duration-fast)]",
+                      showInactive ? "rotate-180" : "",
+                    )}
+                    aria-hidden="true"
+                  />
+                </button>
+
+                {showInactive ? (
+                  <div
+                    id="inactive-barbershops-list"
+                    className="border-t border-white/[0.04] px-4 py-3 sm:px-5"
+                  >
+                    <p className="text-xs text-[color:var(--text-muted)]">
                       Siguen ocupando su slug. Reactivá para volver a usarlas o
                       eliminá definitivamente para liberar el slug.
                     </p>
-                  </div>
-                  <div className="rounded-md border border-[color:var(--border-default)] bg-black px-3 py-2 text-xs text-[color:var(--text-muted)]">
-                    {metrics.barbershops.filter((b) => !b.isActive).length}{" "}
-                    inactivas
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3">
-                  {metrics.barbershops
-                    .filter((b) => !b.isActive)
-                    .map((barbershop) => (
-                      <article
-                        key={barbershop.slug}
-                        className="rounded-lg border border-dashed border-[color:var(--border-default)] bg-black/40 p-4"
-                      >
-                        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-                          <div>
-                            <h3 className="text-base font-bold text-[color:var(--text-secondary)] line-through decoration-[color:var(--text-subtle)]">
-                              {barbershop.name}
-                            </h3>
-                            <p className="mt-1 text-xs font-semibold uppercase text-[color:var(--text-subtle)]">
-                              /{barbershop.slug}
-                            </p>
+                    <div className="mt-3 grid gap-2.5">
+                      {inactiveBarbershops.map((barbershop) => (
+                        <article
+                          key={barbershop.slug}
+                          className="rounded-[var(--radius-sm)] border border-dashed border-white/[0.08] bg-[color:var(--surface-0)] p-3 sm:p-4"
+                        >
+                          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                            <div>
+                              <h3 className="text-base font-bold text-[color:var(--text-secondary)] line-through decoration-[color:var(--text-subtle)]">
+                                {barbershop.name}
+                              </h3>
+                              <p className="mt-1 font-mono text-[11px] text-[color:var(--text-subtle)]">
+                                /{barbershop.slug}
+                              </p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 sm:w-72">
+                              <button
+                                type="button"
+                                disabled={reactivatingSlug === barbershop.slug}
+                                onClick={() =>
+                                  handleReactivateBarbershop(barbershop.slug)
+                                }
+                                className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[color:var(--success)]/40 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--success)] transition-colors duration-[var(--duration-fast)] press-shrink hover:bg-[color:var(--success-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {reactivatingSlug === barbershop.slug
+                                  ? "Reactivando…"
+                                  : "Reactivar"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={hardDeletingSlug === barbershop.slug}
+                                onClick={() =>
+                                  handleHardDeleteBarbershop(barbershop.slug)
+                                }
+                                className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[color:var(--danger)]/40 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--danger)] transition-colors duration-[var(--duration-fast)] press-shrink hover:bg-[color:var(--danger-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {hardDeletingSlug === barbershop.slug
+                                  ? "Eliminando…"
+                                  : "Eliminar def."}
+                              </button>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 sm:w-72">
-                            <button
-                              type="button"
-                              disabled={reactivatingSlug === barbershop.slug}
-                              onClick={() =>
-                                handleReactivateBarbershop(barbershop.slug)
-                              }
-                              className="inline-flex min-h-10 items-center justify-center rounded-md border border-[color:var(--success)]/40 px-3 py-2 text-center text-xs font-bold uppercase text-[color:var(--success)] transition hover:bg-[color:var(--success-soft)] disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {reactivatingSlug === barbershop.slug
-                                ? "Reactivando..."
-                                : "Reactivar"}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={hardDeletingSlug === barbershop.slug}
-                              onClick={() =>
-                                handleHardDeleteBarbershop(barbershop.slug)
-                              }
-                              className="inline-flex min-h-10 items-center justify-center rounded-md border border-[color:var(--danger)]/40 px-3 py-2 text-center text-xs font-bold uppercase text-[color:var(--danger)] transition hover:bg-[color:var(--danger-soft)] disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {hardDeletingSlug === barbershop.slug
-                                ? "Eliminando..."
-                                : "Eliminar def."}
-                            </button>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </section>
             ) : null}
           </>
