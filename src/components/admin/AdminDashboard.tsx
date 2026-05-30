@@ -741,47 +741,49 @@ export function AdminDashboard({ barbershop }: AdminDashboardProps) {
             <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
               Acciones rápidas
             </p>
-            <div className="mt-3 grid gap-2.5 sm:grid-cols-[1.4fr_1fr_1fr_1fr]">
-              <Link
-                href={`/${barbershop.slug}/reservar`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[color:var(--brand-gold)] px-4 text-[12px] font-bold uppercase tracking-[0.16em] text-black transition-all duration-[var(--duration-fast)] press-shrink hover:bg-[color:var(--brand-gold-hi)] hover:shadow-[0_0_0_3px_var(--brand-gold-ring)]"
-              >
-                <Plus className="size-4" aria-hidden="true" />
-                Nuevo turno
-              </Link>
-              <QuickAction
+
+            {/* Primary CTA: + Nuevo turno (ancho, prominente) */}
+            <Link
+              href={`/${barbershop.slug}/reservar`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[color:var(--brand-gold)] px-4 text-[12px] font-bold uppercase tracking-[0.16em] text-black transition-all duration-[var(--duration-fast)] press-shrink hover:bg-[color:var(--brand-gold-hi)] hover:shadow-[0_0_0_3px_var(--brand-gold-ring)]"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Nuevo turno
+            </Link>
+
+            {/* Secondary: grid de íconos compactos — 3 cols mobile, 6 cols sm+ */}
+            <div className="mt-2.5 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              <QuickActionIcon
                 href={`/${barbershop.slug}/admin/turnero`}
-                icon={<CalendarDays className="size-4" aria-hidden="true" />}
+                icon={<CalendarDays className="size-5" aria-hidden="true" />}
                 label="Turnero"
               />
-              <QuickAction
-                href={`/${barbershop.slug}/admin/reportes`}
-                icon={<LineChart className="size-4" aria-hidden="true" />}
-                label="Reportes"
-              />
-              <QuickAction
-                href={`/${barbershop.slug}/admin/settings`}
-                icon={<Settings className="size-4" aria-hidden="true" />}
-                label="Configuración"
-              />
-            </div>
-            <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3">
-              <QuickAction
+              <QuickActionIcon
                 href={`/${barbershop.slug}/admin/clientes`}
-                icon={<User className="size-4" aria-hidden="true" />}
+                icon={<User className="size-5" aria-hidden="true" />}
                 label="Clientes"
               />
-              <QuickAction
+              <QuickActionIcon
                 href={`/${barbershop.slug}/admin/barbers`}
-                icon={<Users className="size-4" aria-hidden="true" />}
+                icon={<Users className="size-5" aria-hidden="true" />}
                 label="Barberos"
               />
-              <QuickAction
+              <QuickActionIcon
                 href={`/${barbershop.slug}/admin/resenas`}
-                icon={<Star className="size-4" aria-hidden="true" />}
+                icon={<Star className="size-5" aria-hidden="true" />}
                 label="Reseñas"
+              />
+              <QuickActionIcon
+                href={`/${barbershop.slug}/admin/reportes`}
+                icon={<LineChart className="size-5" aria-hidden="true" />}
+                label="Reportes"
+              />
+              <QuickActionIcon
+                href={`/${barbershop.slug}/admin/settings`}
+                icon={<Settings className="size-5" aria-hidden="true" />}
+                label="Settings"
               />
             </div>
           </section>
@@ -1017,7 +1019,7 @@ function SummaryRow({
   );
 }
 
-function QuickAction({
+function QuickActionIcon({
   href,
   icon,
   label,
@@ -1029,10 +1031,15 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-white/[0.06] bg-[color:var(--surface-1)] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-secondary)] transition-all duration-[var(--duration-fast)] press-shrink hover:border-[color:var(--brand-gold)]/40 hover:bg-[color:var(--brand-gold-soft)] hover:text-[color:var(--brand-gold)]"
+      title={label}
+      className="group flex aspect-square min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-white/[0.04] bg-[color:var(--surface-1)] px-2 py-2 text-[color:var(--text-secondary)] transition-all duration-[var(--duration-fast)] press-shrink hover:border-[color:var(--brand-gold)]/40 hover:bg-[color:var(--brand-gold-soft)] hover:text-[color:var(--brand-gold)] sm:aspect-auto sm:min-h-[80px]"
     >
-      {icon}
-      {label}
+      <span className="text-[color:var(--text-subtle)] transition-colors group-hover:text-[color:var(--brand-gold)]">
+        {icon}
+      </span>
+      <span className="text-center text-[9px] font-bold uppercase tracking-[0.14em] leading-tight sm:text-[10px]">
+        {label}
+      </span>
     </Link>
   );
 }
