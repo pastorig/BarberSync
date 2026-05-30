@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
   Clock3,
+  ExternalLink,
+  Key,
+  MoreVertical,
   Sparkles,
+  Trash2,
   TrendingUp,
 } from "lucide-react";
 import { useConfirm } from "@/components/ui";
@@ -15,8 +19,54 @@ import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/format";
 import {
   getOwnerDashboardMetrics,
+  type OwnerBarbershopSummary,
   type OwnerDashboardMetrics,
 } from "@/lib/owner-metrics";
+
+/**
+ * Salud de una barbería basada en su actividad reciente.
+ * - active: tiene reservas hoy O última actividad ≤ 3 días
+ * - quiet: sin reservas hoy, última actividad entre 4 y 14 días
+ * - inactive: sin actividad > 14 días o nunca registró nada
+ */
+type HealthStatus = "active" | "quiet" | "inactive";
+
+function getHealthStatus(
+  barbershop: OwnerBarbershopSummary,
+): { status: HealthStatus; label: string; daysSinceLast: number | null } {
+  if (barbershop.todayAppointmentCount > 0) {
+    return { status: "active", label: "Activa", daysSinceLast: 0 };
+  }
+  if (!barbershop.lastAppointmentCreatedAt) {
+    return { status: "inactive", label: "Sin actividad", daysSinceLast: null };
+  }
+  const last = new Date(barbershop.lastAppointmentCreatedAt).getTime();
+  const days = Math.floor((Date.now() - last) / (1000 * 60 * 60 * 24));
+  if (days <= 3) return { status: "active", label: "Activa", daysSinceLast: days };
+  if (days <= 14)
+    return { status: "quiet", label: "Sin reservas hoy", daysSinceLast: days };
+  return { status: "inactive", label: "Inactiva", daysSinceLast: days };
+}
+
+const HEALTH_PILL: Record<
+  HealthStatus,
+  { dot: string; classes: string }
+> = {
+  active: {
+    dot: "bg-[color:var(--success)]",
+    classes:
+      "border-[color:var(--success)]/40 bg-[color:var(--success-soft)] text-[color:var(--success)]",
+  },
+  quiet: {
+    dot: "bg-amber-400",
+    classes: "border-amber-400/40 bg-amber-400/10 text-amber-300",
+  },
+  inactive: {
+    dot: "bg-[color:var(--danger)]",
+    classes:
+      "border-[color:var(--danger)]/40 bg-[color:var(--danger-soft)] text-[color:var(--danger)]",
+  },
+};
 
 const emptyMetrics: OwnerDashboardMetrics = {
   knownBarbershopsCount: 0,
@@ -320,26 +370,27 @@ export function OwnerDashboard() {
     }
   }
 
-  const summaryCards = [
+  // Totales de plataforma — métricas cumulativas/históricas.
+  // Las "live metrics" del día (reservas hoy, próxima, top) viven en PlatformPulse.
+  const platformTotals = [
     {
-      label: "Barberias",
+      label: "Barberías",
       value: metrics.knownBarbershopsCount,
+      hint: `${metrics.barbershops.filter((b) => b.isActive).length} activas`,
     },
     {
       label: "Barberos",
       value: metrics.totalBarbersCount,
     },
     {
+      label: "Servicios",
+      value: metrics.activeServicesCount,
+      hint: "activos",
+    },
+    {
       label: "Reservas totales",
       value: metrics.totalAppointmentsCount,
-    },
-    {
-      label: "Reservas de hoy",
-      value: metrics.todayAppointmentsCount,
-    },
-    {
-      label: "Servicios activos",
-      value: metrics.activeServicesCount,
+      hint: "histórico",
     },
   ];
 
@@ -391,138 +442,217 @@ export function OwnerDashboard() {
 
         {!isLoading ? (
           <>
-            <section className="mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:grid-cols-3 lg:grid-cols-5">
-              {summaryCards.map((card) => (
-                <article
-                  key={card.label}
-                  className="rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-3 shadow-lg shadow-black/20 sm:p-4"
-                >
-                  <p className="text-[11px] font-bold uppercase text-[color:var(--text-subtle)]">
-                    {card.label}
-                  </p>
-                  <p className="mt-2 font-mono text-2xl font-black text-[color:var(--brand-gold)] sm:text-3xl">
-                    {card.value}
-                  </p>
-                </article>
-              ))}
+            {/* PLATFORM TOTALS — métricas históricas, ribbon compacto */}
+            <section className="mt-6 sm:mt-8">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
+                Totales de plataforma
+              </p>
+              <div className="mt-3 grid grid-cols-2 overflow-hidden rounded-[var(--radius-sm)] border border-white/[0.04] bg-[color:var(--surface-1)] sm:grid-cols-4">
+                {platformTotals.map((card, i) => (
+                  <div
+                    key={card.label}
+                    className={cn(
+                      "flex flex-col items-start gap-1 px-4 py-3",
+                      // Borders selectivos para tabla
+                      i > 0 && i < 2 ? "border-l border-white/[0.04]" : "",
+                      "sm:border-l sm:border-white/[0.04]",
+                      i === 0 ? "sm:border-l-0" : "",
+                      i >= 2 ? "border-t border-white/[0.04] sm:border-t-0" : "",
+                    )}
+                  >
+                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                      {card.label}
+                    </p>
+                    <p className="font-mono text-2xl font-black tabular-nums leading-none text-[color:var(--brand-gold)] sm:text-3xl">
+                      {card.value}
+                    </p>
+                    {card.hint ? (
+                      <p className="text-[10px] text-[color:var(--text-subtle)]">
+                        {card.hint}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             </section>
 
-            <section className="mt-5 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--surface-1)] p-3 shadow-xl shadow-black/20 sm:mt-8 sm:p-5">
+            <section className="mt-6 sm:mt-8">
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase text-[color:var(--brand-gold)]">
-                    Barberias activas
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--brand-gold)]">
+                    Barberías activas
                   </p>
-                  <h2 className="mt-1 text-2xl font-black text-white">
-                    Listado general
-                  </h2>
-                </div>
-                <div className="rounded-md border border-[color:var(--border-default)] bg-black px-3 py-2 text-xs text-[color:var(--text-muted)]">
-                  {metrics.barbershops.filter((b) => b.isActive).length} activas
+                  <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                    {metrics.barbershops.filter((b) => b.isActive).length}{" "}
+                    {metrics.barbershops.filter((b) => b.isActive).length === 1
+                      ? "barbería operando"
+                      : "barberías operando"}
+                  </p>
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-3">
-                {metrics.barbershops.filter((b) => b.isActive).map((barbershop) => {
-                  const resetCredentials =
-                    resetCredentialsBySlug[barbershop.slug];
+              <div className="mt-3 grid gap-2.5">
+                {metrics.barbershops
+                  .filter((b) => b.isActive)
+                  .map((barbershop) => {
+                    const resetCredentials =
+                      resetCredentialsBySlug[barbershop.slug];
+                    const health = getHealthStatus(barbershop);
+                    const isResetting =
+                      resettingAccessSlug === barbershop.slug;
+                    const isDeleting = deletingSlug === barbershop.slug;
+                    const isBusy = isResetting || isDeleting;
 
-                  return (
-                  <article
-                    key={barbershop.slug}
-                    className="rounded-lg border border-[color:var(--border-default)] bg-black/80 p-4"
-                  >
-                    <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
-                      <div>
-                        <h3 className="text-lg font-black text-white sm:text-xl">
-                          {barbershop.name}
-                        </h3>
-                        <p className="mt-1 text-xs font-semibold uppercase text-[color:var(--text-subtle)]">
-                          /{barbershop.slug}
-                        </p>
-                        <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
-                          <div className="rounded-md border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-3 py-2">
-                            <p className="text-[10px] font-bold uppercase text-[color:var(--text-subtle)]">
-                              Barberos
-                            </p>
-                            <p className="mt-1 font-mono text-lg font-black text-[color:var(--brand-gold)]">
-                              {barbershop.barberCount}
-                            </p>
+                    return (
+                      <article
+                        key={barbershop.slug}
+                        className="overflow-hidden rounded-[var(--radius-md)] border border-white/[0.06] bg-[color:var(--surface-1)] hover-lift"
+                      >
+                        <div className="p-4 sm:p-5">
+                          {/* Header: nombre + health badge + kebab */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="truncate text-lg font-black tracking-tight text-white sm:text-xl">
+                                  {barbershop.name}
+                                </h3>
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em]",
+                                    HEALTH_PILL[health.status].classes,
+                                  )}
+                                  title={
+                                    health.daysSinceLast === null
+                                      ? "Nunca registró actividad"
+                                      : health.daysSinceLast === 0
+                                        ? "Con reservas hoy"
+                                        : `Última actividad hace ${health.daysSinceLast} día${health.daysSinceLast === 1 ? "" : "s"}`
+                                  }
+                                >
+                                  <span
+                                    aria-hidden="true"
+                                    className={cn(
+                                      "inline-block size-1.5 rounded-full",
+                                      HEALTH_PILL[health.status].dot,
+                                    )}
+                                  />
+                                  {health.label}
+                                </span>
+                              </div>
+                              <p className="mt-1 font-mono text-[11px] text-[color:var(--text-subtle)]">
+                                /{barbershop.slug}
+                                {barbershop.isDemo ? " · demo" : ""}
+                              </p>
+                            </div>
+                            <OwnerCardKebab
+                              barbershopSlug={barbershop.slug}
+                              isDemo={barbershop.isDemo}
+                              isRemovable={barbershop.isRemovable}
+                              isResetting={isResetting}
+                              isDeleting={isDeleting}
+                              onResetAccess={() =>
+                                handleResetAdminAccess(barbershop.slug)
+                              }
+                              onDelete={() =>
+                                handleDeleteBarbershop(barbershop.slug)
+                              }
+                            />
                           </div>
-                          <div className="rounded-md border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-3 py-2">
-                            <p className="text-[10px] font-bold uppercase text-[color:var(--text-subtle)]">
-                              Reservas
-                            </p>
-                            <p className="mt-1 font-mono text-lg font-black text-[color:var(--brand-gold)]">
-                              {barbershop.appointmentCount}
-                            </p>
+
+                          {/* Stats inline */}
+                          <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[13px] text-[color:var(--text-secondary)]">
+                            <span className="inline-flex items-baseline gap-1.5">
+                              <span className="font-mono text-base font-black tabular-nums text-white">
+                                {barbershop.barberCount}
+                              </span>
+                              <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+                                {barbershop.barberCount === 1
+                                  ? "barbero"
+                                  : "barberos"}
+                              </span>
+                            </span>
+                            <span className="text-[color:var(--text-subtle)]">·</span>
+                            <span className="inline-flex items-baseline gap-1.5">
+                              <span className="font-mono text-base font-black tabular-nums text-white">
+                                {barbershop.appointmentCount}
+                              </span>
+                              <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+                                reservas
+                              </span>
+                            </span>
+                            {barbershop.todayAppointmentCount > 0 ? (
+                              <>
+                                <span className="text-[color:var(--text-subtle)]">·</span>
+                                <span className="inline-flex items-baseline gap-1.5">
+                                  <span className="font-mono text-base font-black tabular-nums text-[color:var(--brand-gold)]">
+                                    {barbershop.todayAppointmentCount}
+                                  </span>
+                                  <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--brand-gold)]/80">
+                                    hoy
+                                  </span>
+                                </span>
+                              </>
+                            ) : null}
                           </div>
+
+                          {/* Primary CTA: Abrir Admin + secondary Pública */}
+                          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                            <Link
+                              href={`/${barbershop.slug}/admin`}
+                              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[color:var(--brand-gold)] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-black transition-all duration-[var(--duration-fast)] press-shrink hover:bg-[color:var(--brand-gold-hi)] hover:shadow-[0_0_0_3px_var(--brand-gold-ring)]"
+                            >
+                              Abrir admin
+                              <ArrowUpRight
+                                className="size-4"
+                                aria-hidden="true"
+                              />
+                            </Link>
+                            <Link
+                              href={`/${barbershop.slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-white/[0.06] bg-[color:var(--surface-0)] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] press-shrink hover:border-[color:var(--brand-gold)]/40 hover:text-[color:var(--brand-gold)]"
+                            >
+                              <ExternalLink
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
+                              Pública
+                            </Link>
+                          </div>
+
+                          {/* Busy state */}
+                          {isBusy ? (
+                            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--text-subtle)]">
+                              {isResetting
+                                ? "Reseteando acceso…"
+                                : "Eliminando…"}
+                            </p>
+                          ) : null}
                         </div>
-                      </div>
 
-                      <div className="grid grid-cols-2 gap-2 sm:w-56">
-                        <Link
-                          href={`/${barbershop.slug}`}
-                          className="inline-flex min-h-10 items-center justify-center rounded-md border border-[color:var(--border-default)] px-3 py-2 text-center text-xs font-bold uppercase text-white transition hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)]"
-                        >
-                          Pagina publica
-                        </Link>
-                        <Link
-                          href={`/${barbershop.slug}/admin`}
-                          className="inline-flex min-h-10 items-center justify-center rounded-md bg-[color:var(--brand-gold)] px-3 py-2 text-center text-xs font-bold uppercase text-black transition hover:bg-[color:var(--brand-gold-hi)]"
-                        >
-                          Abrir admin
-                        </Link>
-                        <button
-                          type="button"
-                          disabled={resettingAccessSlug === barbershop.slug}
-                          onClick={() => handleResetAdminAccess(barbershop.slug)}
-                          className="col-span-2 inline-flex min-h-10 items-center justify-center rounded-md border border-[color:var(--brand-gold)]/30 px-3 py-2 text-center text-xs font-bold uppercase text-[color:var(--brand-gold)] transition hover:bg-[color:var(--brand-gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {resettingAccessSlug === barbershop.slug
-                            ? "Reseteando acceso..."
-                            : "Resetear acceso admin"}
-                        </button>
-                        {barbershop.isRemovable ? (
-                          <button
-                            type="button"
-                            disabled={deletingSlug === barbershop.slug}
-                            onClick={() => handleDeleteBarbershop(barbershop.slug)}
-                            className="col-span-2 inline-flex min-h-10 items-center justify-center rounded-md border border-[color:var(--danger)]/40 px-3 py-2 text-center text-xs font-bold uppercase text-[color:var(--danger)] transition hover:bg-[color:var(--danger-soft)] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {deletingSlug === barbershop.slug
-                              ? "Eliminando..."
-                              : "Eliminar barberia"}
-                          </button>
-                        ) : (
-                          <div className="col-span-2 rounded-md border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-3 py-2 text-center text-[11px] font-bold uppercase text-[color:var(--text-subtle)]">
-                            {barbershop.isDemo ? "Barberia demo" : "Sin eliminacion"}
+                        {resetCredentials ? (
+                          <div className="border-t border-[color:var(--success)]/30 bg-[color:var(--success-soft)] px-4 py-3 text-xs text-[color:var(--success)] sm:px-5">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em]">
+                              Acceso admin actualizado
+                            </p>
+                            <p className="mt-1.5">
+                              Email:{" "}
+                              <span className="font-mono font-semibold">
+                                {resetCredentials.email}
+                              </span>
+                            </p>
+                            <p className="mt-0.5">
+                              Contraseña temporal:{" "}
+                              <span className="font-mono font-black">
+                                {resetCredentials.temporaryPassword}
+                              </span>
+                            </p>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                    {resetCredentials ? (
-                      <div className="mt-4 rounded-md border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] px-3 py-3 text-xs text-[color:var(--success)]">
-                        <p className="font-bold uppercase text-[color:var(--success)]">
-                          Acceso admin actualizado
-                        </p>
-                        <p className="mt-2">
-                          Email:{" "}
-                          <span className="font-mono font-semibold">
-                            {resetCredentials.email}
-                          </span>
-                        </p>
-                        <p className="mt-1">
-                          Contrasena temporal:{" "}
-                          <span className="font-mono font-black">
-                            {resetCredentials.temporaryPassword}
-                          </span>
-                        </p>
-                      </div>
-                    ) : null}
-                  </article>
-                  );
-                })}
+                        ) : null}
+                      </article>
+                    );
+                  })}
               </div>
             </section>
 
@@ -777,5 +907,114 @@ function PlatformPulse({ metrics }: { metrics: OwnerDashboardMetrics }) {
         </div>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Menú contextual de acciones secundarias para cada card de barbería activa.
+ * El CTA primario (Abrir admin) y el secundario (Pública) viven fuera de este menú.
+ */
+function OwnerCardKebab({
+  barbershopSlug,
+  isDemo,
+  isRemovable,
+  isResetting,
+  isDeleting,
+  onResetAccess,
+  onDelete,
+}: {
+  barbershopSlug: string;
+  isDemo: boolean;
+  isRemovable: boolean;
+  isResetting: boolean;
+  isDeleting: boolean;
+  onResetAccess: () => void;
+  onDelete: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClick(event: MouseEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [isOpen]);
+
+  const disabled = isResetting || isDeleting;
+  const itemCount = 1 + (isRemovable ? 1 : 0);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        disabled={disabled}
+        aria-label={`Más acciones (${itemCount})`}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        title="Más acciones"
+        className={cn(
+          "inline-flex size-9 items-center justify-center rounded-[var(--radius-sm)] border transition-all duration-[var(--duration-fast)] press-shrink disabled:cursor-not-allowed disabled:opacity-40",
+          isOpen
+            ? "border-[color:var(--brand-gold)] bg-[color:var(--brand-gold-soft)] text-[color:var(--brand-gold)]"
+            : "border-white/[0.06] bg-[color:var(--surface-0)] text-[color:var(--text-muted)] hover:border-[color:var(--brand-gold)]/40 hover:text-[color:var(--brand-gold)]",
+        )}
+      >
+        <MoreVertical className="size-4" aria-hidden="true" />
+      </button>
+
+      {isOpen ? (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-20 mt-1.5 w-56 origin-top-right animate-scale-in overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-[color:var(--surface-1)] shadow-2xl"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setIsOpen(false);
+              onResetAccess();
+            }}
+            disabled={isResetting}
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-[color:var(--brand-gold)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Key className="size-4 shrink-0" aria-hidden="true" />
+            {isResetting ? "Reseteando…" : "Resetear acceso admin"}
+          </button>
+          {isRemovable ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setIsOpen(false);
+                onDelete();
+              }}
+              disabled={isDeleting}
+              className="flex w-full items-center gap-2 border-t border-[color:var(--border-default)] px-3 py-2.5 text-left text-xs font-semibold text-[color:var(--danger)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--danger-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 className="size-4 shrink-0" aria-hidden="true" />
+              {isDeleting ? "Eliminando…" : "Eliminar barbería"}
+            </button>
+          ) : (
+            <div className="border-t border-[color:var(--border-default)] px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-subtle)]">
+              {isDemo ? `Demo · /${barbershopSlug}` : "Sin eliminación"}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
