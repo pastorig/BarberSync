@@ -109,7 +109,22 @@ export function AdminReviewsManager({ barbershop }: AdminReviewsManagerProps) {
       ) : null}
 
       {isLoading ? (
-        <p className="text-sm text-[color:var(--text-muted)]">Cargando reseñas…</p>
+        <ul className="grid gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <li
+              key={i}
+              aria-hidden="true"
+              className="rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] p-4 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="skeleton h-4 w-32 rounded" />
+                <div className="skeleton h-3 w-16 rounded" />
+              </div>
+              <div className="skeleton h-3 w-full rounded" />
+              <div className="skeleton h-3 w-3/4 rounded" />
+            </li>
+          ))}
+        </ul>
       ) : reviews.length === 0 ? (
         <div className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--border-subtle)] p-10 text-center">
           <Users className="mx-auto size-8 text-[color:var(--text-subtle)]" />
