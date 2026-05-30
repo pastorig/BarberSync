@@ -112,17 +112,25 @@ type BarbershopRow = {
   working_hours_end: string;
   slot_interval_minutes: number;
   is_active: boolean;
+  auto_confirm_appointments: boolean;
 };
 
 type BarbershopInsert = Omit<
   BarbershopRow,
-  "id" | "created_at" | "address" | "logo_url" | "google_reviews_url"
+  | "id"
+  | "created_at"
+  | "address"
+  | "logo_url"
+  | "google_reviews_url"
+  | "auto_confirm_appointments"
 > & {
   id?: string;
   created_at?: string;
   address?: string | null;
   logo_url?: string | null;
   google_reviews_url?: string | null;
+  /** Defaultea a false en DB — opcional al insertar. */
+  auto_confirm_appointments?: boolean;
 };
 
 type BarbershopUpdate = Partial<BarbershopInsert>;

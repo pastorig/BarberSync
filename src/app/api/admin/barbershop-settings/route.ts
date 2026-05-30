@@ -5,7 +5,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 export const runtime = "nodejs";
 
 const barbershopSelectFields =
-  "id, created_at, slug, name, description, whatsapp, instagram, address, logo_url, google_reviews_url, working_hours_start, working_hours_end, slot_interval_minutes, is_active";
+  "id, created_at, slug, name, description, whatsapp, instagram, address, logo_url, google_reviews_url, working_hours_start, working_hours_end, slot_interval_minutes, is_active, auto_confirm_appointments";
 
 async function assertAdminOfBarbershop(
   authHeader: string | null,
@@ -143,6 +143,7 @@ export async function PATCH(request: Request) {
           working_hours_end: endTime,
           slot_interval_minutes: intervalValue,
           is_active: Boolean(payload.isActive ?? true),
+          auto_confirm_appointments: Boolean(payload.autoConfirmAppointments),
         },
         { onConflict: "slug" },
       );
@@ -173,6 +174,7 @@ export async function PATCH(request: Request) {
       working_hours_end: endTime,
       slot_interval_minutes: intervalValue,
       is_active: Boolean(payload.isActive ?? true),
+      auto_confirm_appointments: Boolean(payload.autoConfirmAppointments),
     })
     .eq("slug", barbershopSlug)
     .select(barbershopSelectFields)

@@ -488,7 +488,9 @@ export function BookingForm({ barbershop }: BookingFormProps) {
     let confirmationToken: string | undefined;
 
     try {
-      const { data, error } = await createPendingAppointment(appointment);
+      const { data, error } = await createPendingAppointment(appointment, {
+        autoConfirm: barbershop.autoConfirmAppointments ?? false,
+      });
 
       if (error) {
         // 23505 = unique_violation de Postgres. El índice parcial
@@ -1131,6 +1133,7 @@ function BookingSuccess({
   barbershop: DemoBarbershop;
 }) {
   const confirmHref = `/r/${result.confirmationToken}`;
+  const isAutoConfirmed = barbershop.autoConfirmAppointments ?? false;
 
   return (
     <section className="grid gap-12 pb-16 lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-20 lg:pb-0">
@@ -1142,10 +1145,27 @@ function BookingSuccess({
           ¡Listo, {firstNameOf(result.customerName)}!
         </h1>
         <p className="mt-6 max-w-xl text-sm leading-7 text-[color:var(--text-secondary)] sm:text-base">
-          Tu turno en <span className="text-white font-semibold">{barbershop.name}</span>{" "}
-          quedó <span className="text-[color:var(--brand-gold)] font-semibold">pendiente de confirmación</span>.
-          Guardá el link de abajo: podés ver el detalle o cancelar cuando
-          quieras.
+          Tu turno en{" "}
+          <span className="text-white font-semibold">{barbershop.name}</span>{" "}
+          {isAutoConfirmed ? (
+            <>
+              quedó{" "}
+              <span className="text-[color:var(--success)] font-semibold">
+                confirmado
+              </span>
+              . Guardá el link de abajo: podés ver el detalle o cancelar cuando
+              quieras.
+            </>
+          ) : (
+            <>
+              quedó{" "}
+              <span className="text-[color:var(--brand-gold)] font-semibold">
+                pendiente de confirmación
+              </span>
+              . Guardá el link de abajo: podés ver el detalle o cancelar cuando
+              quieras.
+            </>
+          )}
         </p>
 
         <div className="mt-10 grid gap-3">

@@ -37,6 +37,8 @@ export type DemoBarbershop = {
   barbers: Barber[];
   workingHours: WorkingHours;
   isActive?: boolean;
+  /** Cuando true, las reservas entran como confirmed en vez de pending. */
+  autoConfirmAppointments?: boolean;
 };
 
 export const demoBarbershops: DemoBarbershop[] = [

@@ -32,6 +32,9 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
     String(barbershop.workingHours.intervalMinutes),
   );
   const [isActive, setIsActive] = useState(barbershop.isActive ?? true);
+  const [autoConfirmAppointments, setAutoConfirmAppointments] = useState(
+    barbershop.autoConfirmAppointments ?? false,
+  );
   const [logoUrl, setLogoUrl] = useState<string | null>(
     barbershop.logoUrl ?? null,
   );
@@ -105,6 +108,7 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
           workingHoursEnd: endTime,
           slotIntervalMinutes: intervalValue,
           isActive,
+          autoConfirmAppointments,
         }),
       });
 
@@ -130,6 +134,7 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
           working_hours_end: string;
           slot_interval_minutes: number;
           is_active: boolean;
+          auto_confirm_appointments: boolean;
         };
       };
       const fresh = payload.barbershop;
@@ -143,6 +148,7 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
       setEndTime(fresh.working_hours_end);
       setSlotIntervalMinutes(String(fresh.slot_interval_minutes));
       setIsActive(fresh.is_active ?? true);
+      setAutoConfirmAppointments(fresh.auto_confirm_appointments ?? false);
       setSuccessMessage("Configuración guardada correctamente.");
       toast.success("Configuración guardada");
     } catch {
@@ -554,6 +560,34 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
                   </p>
                   <p className="mt-1 text-xs leading-5 text-[color:var(--text-muted)]">
                     {publicStatusText}
+                  </p>
+                </div>
+              </label>
+
+              <label className="mt-3 flex items-start gap-3 rounded-md border border-[color:var(--border-default)] bg-black px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={autoConfirmAppointments}
+                  disabled={isSaving}
+                  onChange={(event) => {
+                    setAutoConfirmAppointments(event.target.checked);
+                    setErrorMessage("");
+                  }}
+                  className="mt-1 size-4 accent-[color:var(--brand-gold)]"
+                />
+                <div>
+                  <p className="text-sm font-bold text-white">
+                    Auto-confirmar reservas
+                    {autoConfirmAppointments ? (
+                      <span className="ml-2 inline-flex items-center rounded-full border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--success)]">
+                        Activado
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-[color:var(--text-muted)]">
+                    {autoConfirmAppointments
+                      ? "Las reservas entrantes se marcan como confirmadas automáticamente. No vas a tener que confirmar a mano desde el panel."
+                      : "Las reservas entran como pendientes y tenés que confirmarlas a mano. Activá esto si confías en el flujo (pocos no-shows, clientela conocida)."}
                   </p>
                 </div>
               </label>

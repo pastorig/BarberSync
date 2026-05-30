@@ -19,7 +19,7 @@ const defaultWorkingHours = {
 };
 
 const barbershopSelectFields =
-  "id, created_at, slug, name, description, whatsapp, instagram, address, logo_url, google_reviews_url, working_hours_start, working_hours_end, slot_interval_minutes, is_active";
+  "id, created_at, slug, name, description, whatsapp, instagram, address, logo_url, google_reviews_url, working_hours_start, working_hours_end, slot_interval_minutes, is_active, auto_confirm_appointments";
 
 function mapBarbershopRowToDemoBarbershop(
   barbershop: BarbershopRow,
@@ -45,6 +45,7 @@ function mapBarbershopRowToDemoBarbershop(
         ? dbBarbers
         : fallbackDemo?.barbers ?? [],
     isActive: barbershop.is_active,
+    autoConfirmAppointments: barbershop.auto_confirm_appointments ?? false,
     workingHours: {
       start:
         barbershop.working_hours_start?.trim() ||
@@ -194,6 +195,7 @@ type UpdateBarbershopSettingsInput = {
     working_hours_end: string;
     slot_interval_minutes: number;
     is_active: boolean;
+    auto_confirm_appointments: boolean;
   };
 };
 
@@ -211,6 +213,7 @@ export async function updateBarbershopSettings({
     working_hours_end: values.working_hours_end,
     slot_interval_minutes: values.slot_interval_minutes,
     is_active: values.is_active,
+    auto_confirm_appointments: values.auto_confirm_appointments,
   };
   if (values.logo_url !== undefined) {
     updateValues.logo_url = values.logo_url;
