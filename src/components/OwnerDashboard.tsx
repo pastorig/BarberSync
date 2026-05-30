@@ -629,7 +629,7 @@ export function OwnerDashboard() {
                     aria-hidden="true"
                   />
                   <input
-                    type="search"
+                    type="text"
                     inputMode="search"
                     autoComplete="off"
                     placeholder="Buscar barbería por nombre o slug…"
