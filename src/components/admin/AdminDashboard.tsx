@@ -540,12 +540,54 @@ export function AdminDashboard({ barbershop }: AdminDashboardProps) {
               barbershopSlug={barbershop.slug}
             />
 
-            {/* Resumen del día — executive summary list */}
+            {/* Resumen del día — Mobile: grid compacto 3x2. Desktop: lista vertical. */}
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
                 Resumen del día
               </p>
-              <dl className="mt-3 overflow-hidden rounded-[var(--radius-sm)] border border-white/[0.04] bg-[color:var(--surface-1)]">
+
+              {/* MOBILE: grid 3×2 compacto */}
+              <dl className="mt-3 grid grid-cols-3 overflow-hidden rounded-[var(--radius-sm)] border border-white/[0.04] bg-[color:var(--surface-1)] sm:hidden">
+                <SummaryTile
+                  label="Turnos"
+                  value={String(stats.total)}
+                  accent="gold"
+                />
+                <SummaryTile
+                  label="Pendientes"
+                  value={String(stats.pending)}
+                  accent={stats.pending > 0 ? "warning" : undefined}
+                  borderLeft
+                />
+                <SummaryTile
+                  label="Confirmados"
+                  value={String(stats.confirmed)}
+                  accent={stats.confirmed > 0 ? "success" : undefined}
+                  borderLeft
+                />
+                <SummaryTile
+                  label="Ingresos est."
+                  value={formatPrice(stats.estimatedRevenue)}
+                  accent="gold"
+                  borderTop
+                />
+                <SummaryTile
+                  label="Ocupación"
+                  value={`${stats.occupancyPct}%`}
+                  borderTop
+                  borderLeft
+                />
+                <SummaryTile
+                  label="Cierre est."
+                  value={formatMinutesToTime(stats.effectiveClosingMin)}
+                  accent={stats.hasOvertime ? "warning" : undefined}
+                  borderTop
+                  borderLeft
+                />
+              </dl>
+
+              {/* DESKTOP: lista vertical detallada (con hints) */}
+              <dl className="mt-3 hidden overflow-hidden rounded-[var(--radius-sm)] border border-white/[0.04] bg-[color:var(--surface-1)] sm:block">
                 <SummaryRow
                   label="Turnos programados"
                   value={String(stats.total)}
@@ -957,6 +999,59 @@ function NextAppointmentHero({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Tile compacto para el resumen mobile — value centrado arriba +
+ * label uppercase pequeño debajo. Pensado para grid 3 cols.
+ * Soporta borders selectivos (left + top) para el efecto "tabla"
+ * sin tener que usar divide-x/divide-y a nivel parent.
+ */
+function SummaryTile({
+  label,
+  value,
+  accent,
+  borderLeft,
+  borderTop,
+}: {
+  label: string;
+  value: string;
+  accent?: "gold" | "warning" | "success" | "danger";
+  borderLeft?: boolean;
+  borderTop?: boolean;
+}) {
+  const valueColor =
+    accent === "gold"
+      ? "text-[color:var(--brand-gold)]"
+      : accent === "warning"
+        ? "text-amber-300"
+        : accent === "success"
+          ? "text-[color:var(--success)]"
+          : accent === "danger"
+            ? "text-[color:var(--danger)]"
+            : "text-white";
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center gap-1 px-2 py-3 text-center",
+        borderLeft ? "border-l border-white/[0.04]" : "",
+        borderTop ? "border-t border-white/[0.04]" : "",
+      )}
+    >
+      <dd
+        className={cn(
+          "font-mono text-lg font-black tabular-nums leading-none",
+          valueColor,
+        )}
+      >
+        {value}
+      </dd>
+      <dt className="text-[9px] font-bold uppercase tracking-[0.14em] leading-tight text-[color:var(--text-muted)]">
+        {label}
+      </dt>
     </div>
   );
 }
