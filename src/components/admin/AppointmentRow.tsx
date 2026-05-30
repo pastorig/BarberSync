@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import {
   CalendarDays,
   Check,
   Clock3,
   MessageCircle,
+  Pencil,
   Phone,
   RotateCcw,
   Star,
+  StickyNote,
   TimerReset,
   X,
 } from "lucide-react";
@@ -31,6 +34,11 @@ type ActionHandlers = {
     appointment: AppointmentData,
     nextDurationMinutes: number | null,
   ) => void;
+  /** Guarda las notas internas del turno. Resuelve con éxito o lanza. */
+  onSaveInternalNotes?: (
+    appointment: AppointmentData,
+    nextNotes: string,
+  ) => Promise<void>;
 };
 
 type PendingState = {
@@ -121,6 +129,7 @@ export function AppointmentRow({
   onDelete,
   onHardDelete,
   onAdjustActualDuration,
+  onSaveInternalNotes,
   confirmingId,
   cancellingId,
   restoringId,
@@ -255,6 +264,14 @@ export function AppointmentRow({
             <p className="mt-2 line-clamp-2 rounded-[var(--radius-xs)] border-l border-[color:var(--border-subtle)] pl-2 text-[11px] italic text-[color:var(--text-muted)] sm:text-xs">
               {appointment.comment}
             </p>
+          ) : null}
+
+          {onSaveInternalNotes ? (
+            <InternalNotesField
+              appointment={appointment}
+              onSave={onSaveInternalNotes}
+              disabled={isBusy}
+            />
           ) : null}
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -487,5 +504,126 @@ function ActionButton({
       {icon}
       <span className="truncate">{children}</span>
     </button>
+  );
+}
+
+function InternalNotesField({
+  appointment,
+  onSave,
+  disabled,
+}: {
+  appointment: AppointmentData;
+  onSave: (a: AppointmentData, next: string) => Promise<void>;
+  disabled?: boolean;
+}) {
+  const current = appointment.internal_notes ?? "";
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(current);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  function startEditing() {
+    setDraft(appointment.internal_notes ?? "");
+    setErrorMessage("");
+    setIsEditing(true);
+  }
+
+  function cancel() {
+    setDraft(appointment.internal_notes ?? "");
+    setErrorMessage("");
+    setIsEditing(false);
+  }
+
+  async function save() {
+    setErrorMessage("");
+    setIsSaving(true);
+    try {
+      await onSave(appointment, draft);
+      setIsEditing(false);
+    } catch {
+      setErrorMessage("No pudimos guardar.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (!isEditing) {
+    if (!current) {
+      return (
+        <button
+          type="button"
+          onClick={startEditing}
+          disabled={disabled}
+          className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-subtle)] transition-colors duration-[var(--duration-fast)] hover:text-[color:var(--brand-gold)] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <StickyNote className="size-3" aria-hidden="true" />+ Nota interna
+        </button>
+      );
+    }
+    return (
+      <div className="mt-2 rounded-[var(--radius-xs)] border border-[color:var(--brand-gold)]/20 bg-[color:var(--brand-gold-soft)] px-2.5 py-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-start gap-1.5">
+            <StickyNote
+              className="mt-0.5 size-3 shrink-0 text-[color:var(--brand-gold)]"
+              aria-hidden="true"
+            />
+            <p className="text-[11px] text-[color:var(--text-secondary)] sm:text-xs">
+              {current}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={startEditing}
+            disabled={disabled}
+            aria-label="Editar nota"
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-xs)] text-[color:var(--text-subtle)] transition-colors hover:bg-black/20 hover:text-[color:var(--brand-gold)] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Pencil className="size-3" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-[var(--radius-xs)] border border-[color:var(--brand-gold)]/30 bg-[color:var(--surface-0)]/80 p-2">
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        disabled={isSaving}
+        rows={2}
+        maxLength={500}
+        placeholder="Notas que solo vos ves sobre este turno…"
+        autoFocus
+        className="w-full resize-none rounded-[var(--radius-xs)] border border-[color:var(--border-default)] bg-black px-2 py-1.5 text-[11px] text-white outline-none placeholder:text-[color:var(--text-subtle)] focus:border-[color:var(--brand-gold)] sm:text-xs"
+      />
+      {errorMessage ? (
+        <p
+          role="alert"
+          className="mt-1 text-[10px] font-semibold text-[color:var(--danger)]"
+        >
+          {errorMessage}
+        </p>
+      ) : null}
+      <div className="mt-1.5 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={cancel}
+          disabled={isSaving}
+          className="rounded-[var(--radius-xs)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-subtle)] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={isSaving || draft === current}
+          className="rounded-[var(--radius-xs)] bg-[color:var(--brand-gold)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-black transition-colors hover:bg-[color:var(--brand-gold-hi)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isSaving ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+    </div>
   );
 }
