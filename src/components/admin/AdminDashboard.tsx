@@ -17,10 +17,8 @@ import {
   Scissors,
   Settings,
   Star,
-  TrendingUp,
   User,
   Users,
-  Wallet,
 } from "lucide-react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
 import { listAppointmentsByBarbershop } from "@/lib/appointments";
@@ -542,49 +540,52 @@ export function AdminDashboard({ barbershop }: AdminDashboardProps) {
               barbershopSlug={barbershop.slug}
             />
 
-            {/* KPIs grid */}
+            {/* Resumen del día — executive summary list */}
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
-                KPIs del día
+                Resumen del día
               </p>
-              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-2">
-                <KpiCell
-                  label="Turnos"
+              <dl className="mt-3 overflow-hidden rounded-[var(--radius-sm)] border border-white/[0.04] bg-[color:var(--surface-1)]">
+                <SummaryRow
+                  label="Turnos programados"
                   value={String(stats.total)}
                   accent="gold"
                 />
-                <KpiCell
-                  label="Ingresos est."
-                  value={formatPrice(stats.estimatedRevenue)}
-                  hint="Pendiente + confirmado"
-                  icon={<Wallet className="size-3.5" aria-hidden="true" />}
-                />
-                <KpiCell
+                <SummaryRow
                   label="Pendientes"
                   value={String(stats.pending)}
                   accent={stats.pending > 0 ? "warning" : undefined}
                 />
-                <KpiCell
+                <SummaryRow
                   label="Confirmados"
                   value={String(stats.confirmed)}
                   accent={stats.confirmed > 0 ? "success" : undefined}
                 />
-                <KpiCell
+                <SummaryRow
+                  label="Ingresos estimados"
+                  value={formatPrice(stats.estimatedRevenue)}
+                  accent="gold"
+                  emphasize
+                />
+                <SummaryRow
                   label="Ocupación"
                   value={`${stats.occupancyPct}%`}
-                  icon={<TrendingUp className="size-3.5" aria-hidden="true" />}
-                />
-                <KpiCell
-                  label="Cierre est."
-                  value={formatMinutesToTime(stats.effectiveClosingMin)}
                   hint={
-                    stats.hasOvertime
-                      ? `Base ${baseClosingStr}`
-                      : "Sin extensión"
+                    stats.occupancyPct >= 70
+                      ? "Día lleno"
+                      : stats.occupancyPct >= 30
+                        ? "Día activo"
+                        : "Tranquilo"
                   }
-                  accent={stats.hasOvertime ? "warning" : undefined}
                 />
-              </div>
+                <SummaryRow
+                  label="Cierre estimado"
+                  value={formatMinutesToTime(stats.effectiveClosingMin)}
+                  hint={stats.hasOvertime ? `+${stats.effectiveClosingMin - stats.baseClosingMin} min` : `Base ${baseClosingStr}`}
+                  accent={stats.hasOvertime ? "warning" : undefined}
+                  isLast
+                />
+              </dl>
             </div>
           </section>
 
@@ -958,20 +959,24 @@ function NextAppointmentHero({
   );
 }
 
-function KpiCell({
+function SummaryRow({
   label,
   value,
   hint,
-  icon,
   accent,
+  emphasize,
+  isLast,
 }: {
   label: string;
   value: string;
   hint?: string;
-  icon?: React.ReactNode;
   accent?: "gold" | "warning" | "success" | "danger";
+  /** Si true, el value usa text-lg en lugar de text-base — para destacar (ej. ingresos). */
+  emphasize?: boolean;
+  /** Si true, no agrega border-bottom (último item del list). */
+  isLast?: boolean;
 }) {
-  const accentValueClass =
+  const valueColor =
     accent === "gold"
       ? "text-[color:var(--brand-gold)]"
       : accent === "warning"
@@ -981,39 +986,33 @@ function KpiCell({
           : accent === "danger"
             ? "text-[color:var(--danger)]"
             : "text-white";
-  const borderClass =
-    accent === "gold"
-      ? "border-[color:var(--brand-gold)]/20 bg-[color:var(--brand-gold-soft)]"
-      : accent === "warning"
-        ? "border-amber-400/20 bg-amber-400/[0.04]"
-        : "border-white/[0.04] bg-[color:var(--surface-1)]";
 
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-sm)] border px-3 py-2.5 transition-colors duration-[var(--duration-fast)]",
-        borderClass,
+        "flex items-baseline justify-between gap-3 px-4 py-2.5 transition-colors duration-[var(--duration-fast)] hover:bg-white/[0.02]",
+        isLast ? "" : "border-b border-white/[0.04]",
       )}
     >
-      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
-        {icon ? (
-          <span className="text-[color:var(--text-subtle)]">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--text-muted)] sm:text-xs">
+          {label}
+        </dt>
+        {hint ? (
+          <p className="mt-0.5 text-[10px] text-[color:var(--text-subtle)]">
+            {hint}
+          </p>
         ) : null}
-        {label}
       </div>
-      <p
+      <dd
         className={cn(
-          "mt-1 font-mono text-xl font-black tabular-nums leading-none sm:text-2xl",
-          accentValueClass,
+          "shrink-0 font-mono font-black tabular-nums leading-none",
+          emphasize ? "text-xl sm:text-2xl" : "text-base sm:text-lg",
+          valueColor,
         )}
       >
         {value}
-      </p>
-      {hint ? (
-        <p className="mt-1 text-[10px] text-[color:var(--text-subtle)]">
-          {hint}
-        </p>
-      ) : null}
+      </dd>
     </div>
   );
 }
