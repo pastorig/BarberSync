@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, MessageCircle, RotateCcw, Trash2, X } from "lucide-react";
+import { useConfirm } from "@/components/ui";
 import { getCurrentSession } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import {
@@ -39,6 +40,7 @@ function formatDate(iso: string): string {
 }
 
 export function OwnerMessagesList() {
+  const confirm = useConfirm();
   const [requests, setRequests] = useState<ContactRequestRow[]>([]);
   const [filter, setFilter] = useState<Filter>("pending");
   const [isLoading, setIsLoading] = useState(true);
@@ -153,9 +155,13 @@ export function OwnerMessagesList() {
   }
 
   async function handleHardDelete(request: ContactRequestRow) {
-    const ok = window.confirm(
-      "¿Eliminar este mensaje definitivamente? No se puede deshacer.",
-    );
+    const ok = await confirm({
+      title: "Eliminar mensaje",
+      message: "Vas a borrar este mensaje para siempre. No se puede deshacer.",
+      confirmLabel: "Eliminar definitivo",
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setUpdatingId(request.id);
     setErrorMessage("");

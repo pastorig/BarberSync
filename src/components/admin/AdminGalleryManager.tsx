@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { ArrowDown, ArrowUp, ImagePlus, Trash2 } from "lucide-react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
+import { useConfirm } from "@/components/ui";
 import { getCurrentSession } from "@/lib/auth";
 import {
   listGalleryPhotosByBarbershop,
@@ -15,6 +16,7 @@ type AdminGalleryManagerProps = {
 };
 
 export function AdminGalleryManager({ barbershop }: AdminGalleryManagerProps) {
+  const confirm = useConfirm();
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -111,9 +113,13 @@ export function AdminGalleryManager({ barbershop }: AdminGalleryManagerProps) {
   }
 
   async function handleDelete(photo: GalleryPhoto) {
-    const ok = window.confirm(
-      "¿Eliminar esta foto? No se puede deshacer.",
-    );
+    const ok = await confirm({
+      title: "Eliminar foto",
+      message: "La foto se elimina de la galería pública. No se puede deshacer.",
+      confirmLabel: "Eliminar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setBusyPhotoId(photo.id);
     setErrorMessage("");

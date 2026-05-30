@@ -15,6 +15,7 @@ import {
   upsertWeeklySchedulesForBarber,
 } from "@/lib/barber-availability";
 import { listActiveServicesByBarber } from "@/lib/barber-services";
+import { useConfirm } from "@/components/ui";
 import { formatDateForDisplay, timeValueToMinutes } from "@/lib/format";
 import type { BarberRow, BarberServiceRow } from "@/lib/supabase";
 
@@ -44,6 +45,7 @@ export function BarberAvailabilityManager({
   barbershop,
   barber,
 }: BarberAvailabilityManagerProps) {
+  const confirm = useConfirm();
   const [weeklySchedules, setWeeklySchedules] = useState<WeeklyScheduleFormRow[]>(
     buildDefaultWeeklySchedules(barbershop.workingHours),
   );
@@ -308,9 +310,12 @@ export function BarberAvailabilityManager({
     const daysNames = daysList
       .map((d) => WEEKDAY_LABELS[d])
       .join(", ");
-    const ok = window.confirm(
-      `¿Aplicar cierre a las ${newEndTime} para ${daysNames}?`,
-    );
+    const ok = await confirm({
+      title: "Aplicar nuevo cierre",
+      message: `Vas a actualizar el horario de cierre a las ${newEndTime} para ${daysNames}.`,
+      confirmLabel: "Aplicar",
+      cancelLabel: "Volver",
+    });
     if (!ok) return;
 
     setErrorMessage("");
@@ -394,9 +399,13 @@ export function BarberAvailabilityManager({
   }
 
   async function handleDeleteBlock(blockId: string) {
-    const shouldDelete = window.confirm(
-      "Eliminar este bloqueo manual?",
-    );
+    const shouldDelete = await confirm({
+      title: "Eliminar bloqueo",
+      message: "El horario vuelve a estar disponible para reservas.",
+      confirmLabel: "Eliminar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
 
     if (!shouldDelete) {
       return;

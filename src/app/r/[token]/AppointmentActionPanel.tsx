@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CalendarClock, Check, X } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button, useConfirm } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
   cancelAppointmentByToken,
@@ -34,6 +34,7 @@ export function AppointmentActionPanel({
   initialAppointment,
   showActions = true,
 }: AppointmentActionPanelProps) {
+  const confirm = useConfirm();
   const [appointment, setAppointment] = useState(initialAppointment);
   const [actionState, setActionState] = useState<ActionState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -69,9 +70,13 @@ export function AppointmentActionPanel({
 
   async function handleCancel() {
     if (isFinal) return;
-    const ok = window.confirm(
-      "¿Confirmás que no vas a poder asistir? Se libera el horario.",
-    );
+    const ok = await confirm({
+      title: "Cancelar turno",
+      message: "Vas a liberar este horario para otra persona. ¿Estás seguro?",
+      confirmLabel: "Sí, cancelar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setErrorMessage("");
     setActionState("cancelling");

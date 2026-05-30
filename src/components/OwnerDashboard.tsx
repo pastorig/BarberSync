@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/components/ui";
 import { getCurrentSession } from "@/lib/auth";
 import {
   getOwnerDashboardMetrics,
@@ -18,6 +19,7 @@ const emptyMetrics: OwnerDashboardMetrics = {
 };
 
 export function OwnerDashboard() {
+  const confirm = useConfirm();
   const [metrics, setMetrics] = useState<OwnerDashboardMetrics>(emptyMetrics);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -71,9 +73,13 @@ export function OwnerDashboard() {
   }, []);
 
   async function handleDeleteBarbershop(slug: string) {
-    const shouldDelete = window.confirm(
-      `Eliminar logicamente la barberia ${slug}? Dejara de estar disponible en BarberSync.`,
-    );
+    const shouldDelete = await confirm({
+      title: "Desactivar barbería",
+      message: `${slug} deja de estar disponible en BarberSync. Los datos se conservan; podés reactivarla después.`,
+      confirmLabel: "Desactivar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
 
     if (!shouldDelete) {
       return;
@@ -123,9 +129,13 @@ export function OwnerDashboard() {
 
   async function handleHardDeleteBarbershop(slug: string) {
     // Doble confirmación: ireversible.
-    const firstConfirm = window.confirm(
-      `¿Eliminar DEFINITIVAMENTE la barbería ${slug}?\n\nSe borran todos los turnos, barberos, servicios y horarios. NO se puede deshacer.`,
-    );
+    const firstConfirm = await confirm({
+      title: "Eliminar DEFINITIVAMENTE",
+      message: `Vas a borrar para siempre la barbería ${slug}: todos los turnos, barberos, servicios y horarios. Esto NO se puede deshacer.`,
+      confirmLabel: "Continuar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!firstConfirm) return;
 
     const secondConfirm = window.prompt(
@@ -140,9 +150,13 @@ export function OwnerDashboard() {
       return;
     }
 
-    const removeAdminUser = window.confirm(
-      `¿También querés liberar el email del admin (eliminarlo de Supabase Auth)?\n\nOK = sí, libera el email para reuso.\nCancelar = no, el user queda pero sin barbería asociada.`,
-    );
+    const removeAdminUser = await confirm({
+      title: "¿Liberar email del admin?",
+      message:
+        "Confirmar = elimina el user de Supabase Auth y libera el email para reuso. Volver = el user queda registrado pero sin barbería asociada.",
+      confirmLabel: "Liberar email",
+      cancelLabel: "No liberar",
+    });
 
     setErrorMessage("");
     setHardDeletingSlug(slug);
@@ -237,9 +251,12 @@ export function OwnerDashboard() {
   }
 
   async function handleResetAdminAccess(slug: string) {
-    const shouldReset = window.confirm(
-      `Generar una nueva contrasena temporal para el admin de ${slug}?`,
-    );
+    const shouldReset = await confirm({
+      title: "Generar contraseña temporal",
+      message: `Se genera una contraseña temporal nueva para el admin de ${slug}. La anterior deja de funcionar.`,
+      confirmLabel: "Generar nueva",
+      cancelLabel: "Volver",
+    });
 
     if (!shouldReset) {
       return;

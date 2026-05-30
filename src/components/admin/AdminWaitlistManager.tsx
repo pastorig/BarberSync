@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
+import { useConfirm } from "@/components/ui";
 import { getCurrentSession } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { formatDateForDisplay, normalizeDateValue } from "@/lib/format";
@@ -31,6 +32,7 @@ const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
 ];
 
 export function AdminWaitlistManager({ barbershop }: AdminWaitlistManagerProps) {
+  const confirm = useConfirm();
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
   const [barbers, setBarbers] = useState<BarberRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -161,7 +163,13 @@ export function AdminWaitlistManager({ barbershop }: AdminWaitlistManagerProps) 
   }
 
   async function handleDelete(entry: WaitlistEntry) {
-    const ok = window.confirm("¿Eliminar esta entrada de la lista?");
+    const ok = await confirm({
+      title: "Eliminar de la lista",
+      message: `Sacar a ${entry.customer_name} de la lista de espera.`,
+      confirmLabel: "Eliminar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     const updated = await callPatch(entry, { softDelete: true });
     if (updated) {
