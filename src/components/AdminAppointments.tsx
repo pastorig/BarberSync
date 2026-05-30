@@ -48,6 +48,7 @@ import {
 import { Select } from "@/components/ui";
 import { AgendaCalendar } from "./admin/AgendaCalendar";
 import { AppointmentRow as AppointmentCard } from "./admin/AppointmentRow";
+import { DuplicateAppointmentModal } from "./admin/DuplicateAppointmentModal";
 import { QuickBlockTimeButton } from "./admin/QuickBlockTimeButton";
 import { getTodayYmd, normalizeTimeShort } from "./admin/date-utils";
 
@@ -102,6 +103,8 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     string | null
   >(null);
   const [isBulkHardDeleting, setIsBulkHardDeleting] = useState(false);
+  const [duplicatingAppointment, setDuplicatingAppointment] =
+    useState<AppointmentRow | null>(null);
   const [restoringAppointmentId, setRestoringAppointmentId] = useState<
     string | null
   >(null);
@@ -1286,6 +1289,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       onDelete={handleDeleteAppointment}
                       onHardDelete={handleHardDeleteAppointment}
                       onSaveInternalNotes={handleSaveInternalNotes}
+                      onDuplicate={setDuplicatingAppointment}
                       confirmingId={confirmingAppointmentId}
                       cancellingId={cancellingAppointmentId}
                       restoringId={restoringAppointmentId}
@@ -1409,6 +1413,21 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
           </>
         ) : null}
       </section>
+
+      <DuplicateAppointmentModal
+        isOpen={duplicatingAppointment !== null}
+        appointment={duplicatingAppointment}
+        onClose={() => setDuplicatingAppointment(null)}
+        onCreated={() => {
+          // Refresca lista para que aparezca el nuevo turno
+          void (async () => {
+            const { data } = await listAppointmentsByBarbershop(
+              barbershop.slug,
+            );
+            setAppointments(data ?? []);
+          })();
+        }}
+      />
     </div>
   );
 }
