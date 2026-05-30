@@ -49,6 +49,7 @@ import {
 import { Select, useConfirm, useToast } from "@/components/ui";
 import { AgendaCalendar } from "./admin/AgendaCalendar";
 import { AppointmentRow as AppointmentCard } from "./admin/AppointmentRow";
+import { AppointmentRowSkeletonList } from "./admin/AppointmentRowSkeleton";
 import { DuplicateAppointmentModal } from "./admin/DuplicateAppointmentModal";
 import { QuickBlockTimeButton } from "./admin/QuickBlockTimeButton";
 import { getTodayYmd, normalizeTimeShort } from "./admin/date-utils";
@@ -1013,11 +1014,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
           </p>
         </header>
 
-        {isLoading ? (
-          <div className="rounded-[var(--radius-sm)] border border-[color:var(--border-subtle)] p-6 text-sm text-[color:var(--text-secondary)]">
-            Cargando reservas...
-          </div>
-        ) : null}
+        {isLoading ? <AppointmentRowSkeletonList count={3} /> : null}
 
         {!isLoading && errorMessage ? (
           <div

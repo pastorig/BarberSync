@@ -894,9 +894,25 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
       ) : null}
 
       {isLoading ? (
-        <p className="text-sm text-[color:var(--text-muted)]">
-          Cargando clientes…
-        </p>
+        <ul className="grid gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <li
+              key={i}
+              aria-hidden="true"
+              className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] p-4"
+            >
+              <div className="skeleton size-11 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="skeleton h-4 w-32 rounded" />
+                <div className="skeleton h-3 w-24 rounded" />
+              </div>
+              <div className="shrink-0 space-y-1.5 text-right">
+                <div className="skeleton h-5 w-8 rounded" />
+                <div className="skeleton h-2 w-12 rounded" />
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : clients.length === 0 ? (
         <div className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--border-subtle)] p-10 text-center">
           <Users className="mx-auto size-8 text-[color:var(--text-subtle)]" />
