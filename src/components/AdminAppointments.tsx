@@ -48,6 +48,7 @@ import {
 import { Select } from "@/components/ui";
 import { AgendaCalendar } from "./admin/AgendaCalendar";
 import { AppointmentRow as AppointmentCard } from "./admin/AppointmentRow";
+import { QuickBlockTimeButton } from "./admin/QuickBlockTimeButton";
 import { getTodayYmd, normalizeTimeShort } from "./admin/date-utils";
 
 type AdminAppointmentsProps = {
@@ -1054,8 +1055,20 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
               </section>
             ) : null}
 
-            {/* Buscador + filtro barbero */}
+            {/* Buscador + filtro barbero + bloqueo rápido */}
             <div className="mb-4 space-y-3">
+              <div className="flex items-center justify-end">
+                <QuickBlockTimeButton
+                  barbershopSlug={barbershop.slug}
+                  barbers={barberFilterOptions}
+                  focusDate={focusDate}
+                  preselectedBarberId={
+                    selectedBarberFilter !== "all"
+                      ? selectedBarberFilter
+                      : undefined
+                  }
+                />
+              </div>
               <div
                 className={cn(
                   "grid gap-2",
