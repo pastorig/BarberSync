@@ -30,6 +30,7 @@ import {
   getStampParts,
   normalizeTimeShort,
   timeToMinutes,
+  toYmd,
 } from "./date-utils";
 
 type ActionHandlers = {
@@ -82,6 +83,8 @@ type StatusMeta = {
   label: string;
   dotColor: string;
   pillClasses: string;
+  cardBorderClass: string;
+  dotPulse: boolean;
 };
 
 function getStatusMeta(status: string): StatusMeta {
@@ -92,6 +95,8 @@ function getStatusMeta(status: string): StatusMeta {
         dotColor: "bg-[color:var(--success)]",
         pillClasses:
           "border-[color:var(--success)]/40 bg-[color:var(--success-soft)] text-[color:var(--success)]",
+        cardBorderClass: "before:bg-[color:var(--success)]/60",
+        dotPulse: false,
       };
     case "cancelled":
       return {
@@ -99,6 +104,8 @@ function getStatusMeta(status: string): StatusMeta {
         dotColor: "bg-[color:var(--danger)]",
         pillClasses:
           "border-[color:var(--danger)]/40 bg-[color:var(--danger-soft)] text-[color:var(--danger)]",
+        cardBorderClass: "before:bg-[color:var(--danger)]/50",
+        dotPulse: false,
       };
     case "deleted":
       return {
@@ -106,6 +113,8 @@ function getStatusMeta(status: string): StatusMeta {
         dotColor: "bg-[color:var(--text-subtle)]",
         pillClasses:
           "border-[color:var(--border-default)] bg-[color:var(--surface-0)] text-[color:var(--text-muted)]",
+        cardBorderClass: "before:bg-[color:var(--border-strong)]",
+        dotPulse: false,
       };
     default:
       return {
@@ -113,6 +122,8 @@ function getStatusMeta(status: string): StatusMeta {
         dotColor: "bg-amber-400",
         pillClasses:
           "border-amber-400/40 bg-amber-400/10 text-amber-300",
+        cardBorderClass: "before:bg-amber-400/60",
+        dotPulse: true,
       };
   }
 }
@@ -133,6 +144,88 @@ function pickPrimaryTag(tags?: string[]): string | null {
   const habIdx = lower.indexOf("habitual");
   if (habIdx !== -1) return tags[habIdx];
   return tags[0];
+}
+
+/**
+ * Hook que re-renderiza el componente cada 60 segundos para mantener
+ * fresca la información temporal relativa ("empieza en 15 min", etc).
+ * Cheap: solo dispara un setState cuando cambia el minuto.
+ */
+function useTickingMinute() {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      force((v) => v + 1);
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+}
+
+type RelativeTimeInfo = {
+  text: string;
+  tone: "info" | "warning" | "danger" | "neutral";
+};
+
+/**
+ * Calcula el estado temporal contextual del turno.
+ * - Día futuro lejano: null
+ * - Día futuro próximo: nada (la fecha lo dice)
+ * - Hoy + futuro: "empieza en Xmin" / "en Xh"
+ * - Hoy + por empezar pero retrasado: "retrasado +Xmin"
+ * - Hoy + en curso: "en curso"
+ * - Hoy + ya terminó: "finalizado"
+ * - Día pasado: "pasado"
+ */
+function getRelativeTimeInfo(opts: {
+  appointmentDate: string;
+  estimatedStartMinutes: number;
+  estimatedEndMinutes: number;
+  delayMinutes: number;
+  status: string;
+}): RelativeTimeInfo | null {
+  if (opts.status === "cancelled" || opts.status === "deleted") return null;
+
+  const now = new Date();
+  const todayIso = toYmd(now);
+
+  if (opts.appointmentDate < todayIso) {
+    return { text: "Pasado", tone: "neutral" };
+  }
+
+  if (opts.appointmentDate > todayIso) {
+    return null; // futuro lejano, ya muestra la fecha
+  }
+
+  // Hoy
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  if (nowMinutes >= opts.estimatedEndMinutes) {
+    return { text: "Finalizado", tone: "neutral" };
+  }
+
+  if (nowMinutes >= opts.estimatedStartMinutes) {
+    return { text: "En curso", tone: "info" };
+  }
+
+  if (opts.delayMinutes > 0) {
+    return {
+      text: `Retrasado +${opts.delayMinutes} min`,
+      tone: "warning",
+    };
+  }
+
+  const minutesUntilStart = opts.estimatedStartMinutes - nowMinutes;
+  if (minutesUntilStart <= 60) {
+    return {
+      text: `Empieza en ${minutesUntilStart} min`,
+      tone: minutesUntilStart <= 15 ? "warning" : "info",
+    };
+  }
+  const hours = Math.floor(minutesUntilStart / 60);
+  return {
+    text: `Empieza en ${hours}h`,
+    tone: "info",
+  };
 }
 
 export function AppointmentRow({
@@ -161,6 +254,9 @@ export function AppointmentRow({
   reviewWhatsAppHref,
   delayWhatsAppHref,
 }: AppointmentRowProps) {
+  // Tick cada 60s para refrescar relative time
+  useTickingMinute();
+
   const status = appointment.status ?? "pending";
   const meta = getStatusMeta(status);
   const isConfirmed = status === "confirmed";
@@ -209,8 +305,27 @@ export function AppointmentRow({
   const phoneDigits = appointment.customer_phone?.replace(/\D+/g, "") ?? "";
   const phoneWaHref = phoneDigits ? `https://wa.me/${phoneDigits}` : null;
 
+  const relTime = getRelativeTimeInfo({
+    appointmentDate: ymdDate,
+    estimatedStartMinutes,
+    estimatedEndMinutes,
+    delayMinutes,
+    status,
+  });
+
+  // Dimming sutil para turnos pasados o finalizados
+  const isPast = relTime?.text === "Pasado" || relTime?.text === "Finalizado";
+
   return (
-    <li className="group relative overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] hover-lift">
+    <li
+      className={cn(
+        "group relative overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] hover-lift transition-opacity",
+        // Border-left de color según status — refuerzo visual del estado.
+        "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:content-['']",
+        meta.cardBorderClass,
+        isPast ? "opacity-70" : "",
+      )}
+    >
       {/* X hard delete absoluta — solo en eliminados */}
       {isDeleted && onHardDelete ? (
         <button
@@ -226,37 +341,48 @@ export function AppointmentRow({
       ) : null}
 
       <div className="flex flex-col sm:flex-row">
-        {/* ───── ZONA A: Bloque temporal ───── */}
+        {/* ───── ZONA A: Bloque temporal (date + time) ───── */}
         <DateTimeBlock
           stamp={stamp}
           startTime={startTimeShort}
           endTime={endTimeShort}
-          durationMinutes={effectiveDurationMinutes}
         />
 
         {/* ───── ZONA B+C+D+E: Contenido principal ───── */}
-        <div className="min-w-0 flex-1 px-4 py-3 sm:px-5 sm:py-4">
-          {/* Línea 1: nombre + status + kebab */}
+        <div className="min-w-0 flex-1 px-4 py-4 sm:px-5 sm:py-5">
+          {/* Línea 1: nombre del cliente + kebab a la derecha */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <h3 className="truncate text-lg font-black tracking-tight text-white sm:text-xl">
+              <h3
+                className="truncate text-xl font-black tracking-tight text-white sm:text-2xl"
+                title={appointment.customer_name}
+              >
                 {appointment.customer_name}
               </h3>
-              {primaryTag ? (
-                <span
-                  className={cn(
-                    "mt-1 inline-flex items-center rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]",
-                    tagClassesFor(getTagTone(primaryTag)),
-                  )}
-                >
-                  {primaryTag}
-                </span>
-              ) : null}
+
+              {/* Línea 2: status pill + tiempo relativo + tag — todos AGRUPADOS al cliente */}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {isDeleted && onHardDelete ? null : (
+                  <StatusPill
+                    key={status}
+                    meta={meta}
+                    aria-label={`Estado: ${meta.label}`}
+                  />
+                )}
+                {relTime ? <RelativeTimeChip info={relTime} /> : null}
+                {primaryTag ? (
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em]",
+                      tagClassesFor(getTagTone(primaryTag)),
+                    )}
+                  >
+                    {primaryTag}
+                  </span>
+                ) : null}
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              {isDeleted && onHardDelete ? null : (
-                <StatusPill meta={meta} />
-              )}
+            <div className="flex shrink-0 items-center">
               {!isDeleted &&
               !isCancelled &&
               (delayWhatsAppHref ||
@@ -278,61 +404,71 @@ export function AppointmentRow({
             </div>
           </div>
 
-          {/* Línea 2: servicio + precio — destacados */}
-          <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-[color:var(--border-subtle)] pt-3">
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-white sm:text-[15px]">
+          {/* Línea 3: servicio + duración (juntos) ── precio (derecha) */}
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-2 text-[15px] font-semibold text-white sm:text-base">
               <Scissors
-                className="size-3.5 text-[color:var(--text-subtle)]"
+                className="size-4 text-[color:var(--text-subtle)]"
                 aria-hidden="true"
               />
               {appointment.service_name}
+              <span className="text-[color:var(--text-subtle)]">·</span>
+              <span className="text-[color:var(--text-muted)] font-medium">
+                {baseDurationMinutes} min
+              </span>
             </span>
-            <span className="font-mono text-base font-black tabular-nums text-[color:var(--brand-gold)] sm:text-lg">
+            <span className="font-mono text-lg font-black tabular-nums text-[color:var(--brand-gold)] sm:text-xl">
               {formatPrice(appointment.service_price)}
             </span>
           </div>
 
-          {/* Línea 3: barbero + telefono */}
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[color:var(--text-muted)] sm:text-sm">
+          {/* Línea 4: barbero · teléfono — compacto en una línea */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 text-[13px] text-[color:var(--text-muted)] sm:text-sm">
             <span className="inline-flex items-center gap-1.5">
               <User
-                className="size-3.5 text-[color:var(--text-subtle)]"
+                className="size-4 text-[color:var(--text-subtle)]"
                 aria-hidden="true"
               />
               {appointment.barber_name}
             </span>
             {appointment.customer_phone ? (
-              phoneWaHref ? (
-                <a
-                  href={phoneWaHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 font-mono text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:text-[color:var(--brand-gold)]"
-                  title="Abrir en WhatsApp"
-                >
-                  <Phone
-                    className="size-3.5 text-[color:var(--text-subtle)]"
-                    aria-hidden="true"
-                  />
-                  {appointment.customer_phone}
-                </a>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 font-mono">
-                  <Phone
-                    className="size-3.5 text-[color:var(--text-subtle)]"
-                    aria-hidden="true"
-                  />
-                  {appointment.customer_phone}
-                </span>
-              )
+              <>
+                <span className="text-[color:var(--text-subtle)]">•</span>
+                {phoneWaHref ? (
+                  <a
+                    href={phoneWaHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 font-mono text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:text-[color:var(--brand-gold)]"
+                    title="Abrir en WhatsApp"
+                  >
+                    <Phone
+                      className="size-4 text-[color:var(--text-subtle)]"
+                      aria-hidden="true"
+                    />
+                    {appointment.customer_phone}
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 font-mono">
+                    <Phone
+                      className="size-4 text-[color:var(--text-subtle)]"
+                      aria-hidden="true"
+                    />
+                    {appointment.customer_phone}
+                  </span>
+                )}
+              </>
             ) : null}
           </div>
 
-          {/* ───── ZONA F: avisos contextuales (solo si aplica) ───── */}
+          {/* ───── ZONA F: avisos contextuales ───── */}
 
-          {/* Overtime — alerta amber prominente */}
+          {/* Overtime */}
           {isOutsideDaySchedule ? (
-            <div className="mt-3 flex flex-wrap items-start gap-2 rounded-[var(--radius-xs)] border border-amber-400/30 bg-amber-400/[0.06] p-2.5">
+            <div
+              role="alert"
+              className="mt-4 flex flex-wrap items-start gap-2 rounded-[var(--radius-xs)] border border-amber-400/30 bg-amber-400/[0.06] p-3"
+            >
               <AlertTriangle
                 className="mt-0.5 size-4 shrink-0 text-amber-300"
                 aria-hidden="true"
@@ -363,9 +499,12 @@ export function AppointmentRow({
             </div>
           ) : null}
 
-          {/* Delay — solo si NO hay overtime y hay delay propagado */}
+          {/* Delay */}
           {!isOutsideDaySchedule && delayMinutes > 0 ? (
-            <div className="mt-3 flex flex-wrap items-start gap-2 rounded-[var(--radius-xs)] border border-[color:var(--danger)]/30 bg-[color:var(--danger-soft)]/40 p-2.5">
+            <div
+              role="alert"
+              className="mt-4 flex flex-wrap items-start gap-2 rounded-[var(--radius-xs)] border border-[color:var(--danger)]/30 bg-[color:var(--danger-soft)]/40 p-3"
+            >
               <Clock3
                 className="mt-0.5 size-4 shrink-0 text-[color:var(--danger)]"
                 aria-hidden="true"
@@ -381,33 +520,34 @@ export function AppointmentRow({
             </div>
           ) : null}
 
-          {/* Duración real diferente — info menor */}
+          {/* Duración real diferente */}
           {durationChanged ? (
-            <p className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--brand-gold)]">
-              <Clock3 className="size-3" aria-hidden="true" />
-              Duración real: {actualDurationMinutes} min (base {baseDurationMinutes})
+            <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--brand-gold)]">
+              <Clock3 className="size-3.5" aria-hidden="true" />
+              Duración real: {actualDurationMinutes} min (base{" "}
+              {baseDurationMinutes})
             </p>
           ) : null}
 
-          {/* Comentario del cliente — border-left celeste, "💬" */}
+          {/* Comentario del cliente */}
           {appointment.comment ? (
             <div className="mt-3 flex items-start gap-2 rounded-r-[var(--radius-xs)] border-l-2 border-sky-400/50 bg-sky-400/[0.04] px-3 py-2">
               <MessageSquare
-                className="mt-0.5 size-3.5 shrink-0 text-sky-400"
+                className="mt-0.5 size-4 shrink-0 text-sky-400"
                 aria-hidden="true"
               />
               <div className="min-w-0 flex-1">
                 <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-sky-300/70">
                   Comentario del cliente
                 </p>
-                <p className="mt-0.5 text-xs leading-relaxed text-[color:var(--text-secondary)] sm:text-sm">
+                <p className="mt-0.5 text-[13px] leading-relaxed text-[color:var(--text-secondary)] sm:text-sm">
                   {appointment.comment}
                 </p>
               </div>
             </div>
           ) : null}
 
-          {/* Nota interna — border-left gold, sticky note */}
+          {/* Nota interna del owner */}
           {onSaveInternalNotes ? (
             <InternalNotesField
               appointment={appointment}
@@ -434,21 +574,22 @@ export function AppointmentRow({
       ) : (
         <div className="border-t border-[color:var(--border-subtle)] bg-[color:var(--surface-0)]/40 p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            {/* PRIMARY: Confirmar (gold sólido, ocupa la mayor parte) */}
+            {/* PRIMARY: Confirmar */}
             <button
+              key={isConfirmed ? "confirmed" : "pending"}
               type="button"
               onClick={() => onConfirm?.(appointment)}
               disabled={isConfirmed || isCancelled || isBusy}
               className={cn(
                 "inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 text-[12px] font-bold uppercase tracking-[0.16em] transition-all duration-[var(--duration-fast)] press-shrink disabled:cursor-not-allowed",
                 isConfirmed
-                  ? "border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] text-[color:var(--success)]"
+                  ? "animate-success-pop border border-[color:var(--success)]/40 bg-[color:var(--success-soft)] text-[color:var(--success)]"
                   : isCancelled
                     ? "border border-[color:var(--border-subtle)] bg-transparent text-[color:var(--text-subtle)] opacity-50"
-                    : "bg-[color:var(--brand-gold)] text-black hover:bg-[color:var(--brand-gold-hi)]",
+                    : "bg-[color:var(--brand-gold)] text-black shadow-[0_0_0_0_var(--brand-gold-ring)] hover:bg-[color:var(--brand-gold-hi)] hover:shadow-[0_0_0_3px_var(--brand-gold-ring)]",
               )}
             >
-              <Check className="size-3.5" aria-hidden="true" />
+              <Check className="size-4" aria-hidden="true" />
               {confirmingId === appointment.id
                 ? "..."
                 : isConfirmed
@@ -456,26 +597,30 @@ export function AppointmentRow({
                   : "Confirmar"}
             </button>
 
-            {/* SECONDARIES en row */}
+            {/* SECONDARIES */}
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* WhatsApp — verde outline */}
               <button
                 type="button"
                 onClick={() => onWhatsApp?.(appointment)}
                 disabled={isCancelled || isBusy}
-                className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--success)]/30 bg-transparent px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--success)] transition-colors duration-[var(--duration-fast)] press-shrink hover:bg-[color:var(--success-soft)] disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+                className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--success)]/30 bg-transparent px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--success)] transition-colors duration-[var(--duration-fast)] press-shrink hover:bg-[color:var(--success-soft)] hover:border-[color:var(--success)]/60 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
               >
-                <MessageCircle className="size-3.5" aria-hidden="true" />
+                <MessageCircle className="size-4" aria-hidden="true" />
                 WhatsApp
               </button>
 
-              {/* Cancelar — link rojo sin borde, decisión consciente */}
               <button
                 type="button"
                 onClick={() => onCancel?.(appointment)}
                 disabled={isCancelled || isBusy}
-                className="inline-flex min-h-11 items-center justify-center gap-1 rounded-[var(--radius-sm)] px-3 text-[11px] font-semibold tracking-[0.06em] text-[color:var(--danger)]/80 transition-colors duration-[var(--duration-fast)] press-shrink hover:bg-[color:var(--danger-soft)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
+                className={cn(
+                  "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border bg-transparent px-3 text-[11px] font-bold uppercase tracking-[0.14em] transition-all duration-[var(--duration-fast)] press-shrink disabled:cursor-not-allowed disabled:opacity-40",
+                  isCancelled
+                    ? "animate-success-pop border-[color:var(--danger)]/40 bg-[color:var(--danger-soft)] text-[color:var(--danger)]"
+                    : "border-[color:var(--danger)]/25 text-[color:var(--danger)]/80 hover:border-[color:var(--danger)]/60 hover:bg-[color:var(--danger-soft)] hover:text-[color:var(--danger)]",
+                )}
               >
+                <X className="size-4" aria-hidden="true" />
                 {cancellingId === appointment.id
                   ? "Cancelando…"
                   : isCancelled
@@ -485,7 +630,7 @@ export function AppointmentRow({
             </div>
           </div>
 
-          {/* Eliminar de la vista — solo si cancelado, link sutil debajo */}
+          {/* Eliminar de la vista — solo si cancelado */}
           {isCancelled && onDelete ? (
             <button
               type="button"
@@ -510,22 +655,19 @@ function DateTimeBlock({
   stamp,
   startTime,
   endTime,
-  durationMinutes,
 }: {
   stamp: { weekday: string; day: string; month: string } | null;
   startTime: string;
   endTime: string;
-  durationMinutes: number;
 }) {
   return (
     <div className="flex shrink-0 flex-row items-stretch border-b border-[color:var(--border-subtle)] bg-[color:var(--surface-0)]/40 sm:w-[88px] sm:flex-col sm:border-b-0 sm:border-r">
-      {/* Bloque fecha (stamp tipo calendario) */}
       {stamp ? (
         <div className="flex flex-col items-center justify-center border-r border-[color:var(--border-subtle)] px-3 py-3 sm:border-r-0 sm:border-b sm:px-2 sm:py-3">
           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-[color:var(--brand-gold)]">
             {stamp.weekday}
           </p>
-          <p className="mt-0.5 font-mono text-2xl font-black leading-none tabular-nums text-white sm:text-3xl">
+          <p className="mt-0.5 font-mono text-xl font-black leading-none tabular-nums text-white sm:text-2xl">
             {stamp.day}
           </p>
           <p className="mt-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
@@ -534,8 +676,7 @@ function DateTimeBlock({
         </div>
       ) : null}
 
-      {/* Bloque horario (inicio ↓ fin) */}
-      <div className="flex flex-1 flex-col items-center justify-center gap-0.5 px-3 py-3 sm:py-3">
+      <div className="flex flex-1 flex-col items-center justify-center gap-0.5 px-3 py-3">
         <p className="font-mono text-base font-black tabular-nums leading-none text-white sm:text-lg">
           {startTime}
         </p>
@@ -548,27 +689,61 @@ function DateTimeBlock({
         <p className="font-mono text-base font-black tabular-nums leading-none text-white sm:text-lg">
           {endTime}
         </p>
-        <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-[color:var(--text-subtle)]">
-          {durationMinutes} min
-        </p>
       </div>
     </div>
   );
 }
 
-function StatusPill({ meta }: { meta: StatusMeta }) {
+function StatusPill({
+  meta,
+  ...rest
+}: { meta: StatusMeta } & React.HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
+      {...rest}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] animate-fade-in",
         meta.pillClasses,
       )}
     >
       <span
         aria-hidden="true"
-        className={cn("inline-block size-1.5 rounded-full", meta.dotColor)}
-      />
+        className={cn(
+          "relative inline-flex size-1.5 rounded-full",
+          meta.dotColor,
+        )}
+      >
+        {meta.dotPulse ? (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute -inset-1 inline-flex animate-ping rounded-full opacity-40",
+              meta.dotColor,
+            )}
+          />
+        ) : null}
+      </span>
       {meta.label}
+    </span>
+  );
+}
+
+function RelativeTimeChip({ info }: { info: RelativeTimeInfo }) {
+  const toneClasses: Record<RelativeTimeInfo["tone"], string> = {
+    info: "border-sky-400/30 bg-sky-400/[0.06] text-sky-300",
+    warning: "border-amber-400/30 bg-amber-400/[0.06] text-amber-300",
+    danger: "border-[color:var(--danger)]/30 bg-[color:var(--danger-soft)] text-[color:var(--danger)]",
+    neutral:
+      "border-[color:var(--border-default)] bg-[color:var(--surface-0)] text-[color:var(--text-muted)]",
+  };
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] animate-fade-in",
+        toneClasses[info.tone],
+      )}
+    >
+      {info.text}
     </span>
   );
 }
@@ -629,14 +804,14 @@ function InternalNotesField({
     return (
       <div className="mt-3 flex items-start gap-2 rounded-r-[var(--radius-xs)] border-l-2 border-[color:var(--brand-gold)]/50 bg-[color:var(--brand-gold-soft)] px-3 py-2">
         <StickyNote
-          className="mt-0.5 size-3.5 shrink-0 text-[color:var(--brand-gold)]"
+          className="mt-0.5 size-4 shrink-0 text-[color:var(--brand-gold)]"
           aria-hidden="true"
         />
         <div className="min-w-0 flex-1">
           <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[color:var(--brand-gold)]/80">
             Mi nota
           </p>
-          <p className="mt-0.5 text-xs leading-relaxed text-[color:var(--text-secondary)] sm:text-sm">
+          <p className="mt-0.5 text-[13px] leading-relaxed text-[color:var(--text-secondary)] sm:text-sm">
             {current}
           </p>
         </div>
@@ -788,7 +963,7 @@ function KebabMenu({
               onClick={() => setIsOpen(false)}
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-[color:var(--danger)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--danger-soft)]"
             >
-              <MessageCircle className="size-3.5 shrink-0" aria-hidden="true" />
+              <MessageCircle className="size-4 shrink-0" aria-hidden="true" />
               Avisar delay
             </a>
           ) : null}
@@ -801,7 +976,7 @@ function KebabMenu({
               onClick={() => setIsOpen(false)}
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-[color:var(--brand-gold)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-soft)]"
             >
-              <Star className="size-3.5 shrink-0" aria-hidden="true" />
+              <Star className="size-4 shrink-0" aria-hidden="true" />
               Pedir reseña
             </a>
           ) : null}
@@ -815,7 +990,7 @@ function KebabMenu({
               }}
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--surface-2)] hover:text-white"
             >
-              <Copy className="size-3.5 shrink-0" aria-hidden="true" />
+              <Copy className="size-4 shrink-0" aria-hidden="true" />
               Duplicar turno
             </button>
           ) : null}
