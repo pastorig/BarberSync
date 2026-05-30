@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   Clock3,
+  Copy,
   MessageCircle,
   Pencil,
   Phone,
@@ -39,6 +40,7 @@ type ActionHandlers = {
     appointment: AppointmentData,
     nextNotes: string,
   ) => Promise<void>;
+  onDuplicate?: (appointment: AppointmentData) => void;
 };
 
 type PendingState = {
@@ -130,6 +132,7 @@ export function AppointmentRow({
   onHardDelete,
   onAdjustActualDuration,
   onSaveInternalNotes,
+  onDuplicate,
   confirmingId,
   cancellingId,
   restoringId,
@@ -462,6 +465,18 @@ export function AppointmentRow({
           <Star className="size-3" aria-hidden="true" />
           Pedir reseña por WhatsApp
         </a>
+      ) : null}
+
+      {onDuplicate && !isDeleted ? (
+        <button
+          type="button"
+          onClick={() => onDuplicate(appointment)}
+          disabled={isBusy}
+          className="flex w-full items-center justify-center gap-1.5 border-t border-[color:var(--border-subtle)] py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--surface-0)] hover:text-[color:var(--brand-gold)] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Copy className="size-3" aria-hidden="true" />
+          Duplicar turno
+        </button>
       ) : null}
     </li>
   );
