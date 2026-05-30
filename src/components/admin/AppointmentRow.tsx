@@ -77,6 +77,8 @@ type AppointmentRowProps = ActionHandlers &
     clientTags?: string[];
     reviewWhatsAppHref?: string;
     delayWhatsAppHref?: string;
+    /** True si este turno es el próximo en empezar (hoy, futuro, más cercano). */
+    isNextUp?: boolean;
   };
 
 type StatusMeta = {
@@ -253,6 +255,7 @@ export function AppointmentRow({
   clientTags,
   reviewWhatsAppHref,
   delayWhatsAppHref,
+  isNextUp,
 }: AppointmentRowProps) {
   // Tick cada 60s para refrescar relative time
   useTickingMinute();
@@ -319,10 +322,13 @@ export function AppointmentRow({
   return (
     <li
       className={cn(
-        "group relative overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[color:var(--surface-1)] hover-lift transition-opacity",
+        "group relative overflow-hidden rounded-[var(--radius-md)] border bg-[color:var(--surface-1)] hover-lift transition-opacity",
         // Border-left de color según status — refuerzo visual del estado.
         "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:content-['']",
         meta.cardBorderClass,
+        isNextUp
+          ? "border-[color:var(--brand-gold)]/40 ring-1 ring-[color:var(--brand-gold)]/20"
+          : "border-[color:var(--border-subtle)]",
         isPast ? "opacity-70" : "",
       )}
     >
