@@ -24,6 +24,12 @@ export type OwnerNextGlobalAppointment = {
   appointmentTime: string;
 };
 
+export type OwnerWeeklyRankingEntry = {
+  slug: string;
+  name: string;
+  count: number;
+};
+
 export type OwnerDashboardMetrics = {
   knownBarbershopsCount: number;
   totalBarbersCount: number;
@@ -40,6 +46,11 @@ export type OwnerDashboardMetrics = {
     name: string;
     count: number;
   } | null;
+  /**
+   * Ranking de barberías por reservas en los últimos 7 días (incluyendo hoy).
+   * Ordenado desc por count. Vacío si no hay reservas en la ventana.
+   */
+  weeklyRanking: OwnerWeeklyRankingEntry[];
   barbershops: OwnerBarbershopSummary[];
 };
 
@@ -71,6 +82,12 @@ async function countAppointmentsForBarbershop(barbershopSlug: string) {
 
 export async function getOwnerDashboardMetrics() {
   const today = getLocalDateInputValue();
+  // Ventana 7 días: hoy + 6 días anteriores
+  const weekAgo = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    return getLocalDateInputValue(d);
+  })();
   const { data: knownBarbershops } = await listKnownBarbershops();
   const demoSlugs = new Set(demoBarbershops.map((barbershop) => barbershop.slug));
 
@@ -95,6 +112,7 @@ export async function getOwnerDashboardMetrics() {
     activeServicesResult,
     todayAppointmentsDataResult,
     lastAppointmentsResult,
+    weeklyAppointmentsResult,
     barbershopSummaries,
   ] = await Promise.all([
     supabase
@@ -130,6 +148,13 @@ export async function getOwnerDashboardMetrics() {
       .neq("status", "deleted")
       .order("created_at", { ascending: false })
       .limit(200),
+    // Ranking semanal — turnos no eliminados de los últimos 7 días
+    supabase
+      .from("appointments")
+      .select("barbershop_slug")
+      .gte("appointment_date", weekAgo)
+      .lte("appointment_date", today)
+      .neq("status", "deleted"),
     Promise.all(
       knownBarbershops.map(async (barbershop) => {
         const [barbersResult, appointmentsResult] = await Promise.all([
@@ -221,6 +246,27 @@ export async function getOwnerDashboardMetrics() {
     }
   }
 
+  // Ranking semanal (últimos 7 días) — agrupado por slug, ordenado desc
+  const weeklyCountBySlug = new Map<string, number>();
+  for (const row of weeklyAppointmentsResult.data ?? []) {
+    weeklyCountBySlug.set(
+      row.barbershop_slug,
+      (weeklyCountBySlug.get(row.barbershop_slug) ?? 0) + 1,
+    );
+  }
+  const weeklyRanking: OwnerWeeklyRankingEntry[] = Array.from(
+    weeklyCountBySlug.entries(),
+  )
+    .map(([slug, count]) => {
+      const match = knownBarbershops.find((b) => b.slug === slug);
+      return {
+        slug,
+        name: match?.name ?? slug,
+        count,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
   // Sumamos las barberías inactivas como entries con stats vacíos —
   // el dashboard las renderiza en una sección aparte.
   const inactiveSummaries: OwnerBarbershopSummary[] = inactiveDbBarbershops.map(
@@ -267,6 +313,7 @@ export async function getOwnerDashboardMetrics() {
       todayEstimatedRevenue,
       nextGlobalAppointment,
       mostActiveBarbershopToday,
+      weeklyRanking,
       barbershops: allBarbershops,
     } satisfies OwnerDashboardMetrics,
     error:

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  ArrowDownAZ,
   ArrowUpRight,
   Clock3,
   ExternalLink,
@@ -11,6 +12,7 @@ import {
   MoreVertical,
   Sparkles,
   Trash2,
+  Trophy,
   TrendingUp,
 } from "lucide-react";
 import { useConfirm } from "@/components/ui";
@@ -21,6 +23,7 @@ import {
   getOwnerDashboardMetrics,
   type OwnerBarbershopSummary,
   type OwnerDashboardMetrics,
+  type OwnerWeeklyRankingEntry,
 } from "@/lib/owner-metrics";
 
 /**
@@ -68,6 +71,20 @@ const HEALTH_PILL: Record<
   },
 };
 
+/**
+ * Modos de ordenamiento del listado de barberías activas.
+ * - activity: más activas primero (turnos hoy desc, luego última actividad)
+ * - historic: por reservas históricas totales desc
+ * - alpha: alfabético por nombre
+ */
+type SortMode = "activity" | "historic" | "alpha";
+
+const SORT_LABELS: Record<SortMode, { label: string; icon: typeof Activity }> = {
+  activity: { label: "Más activas", icon: Activity },
+  historic: { label: "Históricas", icon: TrendingUp },
+  alpha: { label: "A–Z", icon: ArrowDownAZ },
+};
+
 const emptyMetrics: OwnerDashboardMetrics = {
   knownBarbershopsCount: 0,
   totalBarbersCount: 0,
@@ -77,6 +94,7 @@ const emptyMetrics: OwnerDashboardMetrics = {
   todayEstimatedRevenue: 0,
   nextGlobalAppointment: null,
   mostActiveBarbershopToday: null,
+  weeklyRanking: [],
   barbershops: [],
 };
 
@@ -94,6 +112,36 @@ export function OwnerDashboard() {
   const [resetCredentialsBySlug, setResetCredentialsBySlug] = useState<
     Record<string, { email: string; temporaryPassword: string }>
   >({});
+  const [sortMode, setSortMode] = useState<SortMode>("activity");
+
+  const activeBarbershops = useMemo(
+    () => metrics.barbershops.filter((b) => b.isActive),
+    [metrics.barbershops],
+  );
+
+  const sortedActiveBarbershops = useMemo(() => {
+    const list = [...activeBarbershops];
+    if (sortMode === "alpha") {
+      list.sort((a, b) => a.name.localeCompare(b.name, "es"));
+    } else if (sortMode === "historic") {
+      list.sort((a, b) => b.appointmentCount - a.appointmentCount);
+    } else {
+      // activity: hoy desc; empate por última actividad (más reciente primero)
+      list.sort((a, b) => {
+        if (b.todayAppointmentCount !== a.todayAppointmentCount) {
+          return b.todayAppointmentCount - a.todayAppointmentCount;
+        }
+        const aLast = a.lastAppointmentCreatedAt
+          ? new Date(a.lastAppointmentCreatedAt).getTime()
+          : 0;
+        const bLast = b.lastAppointmentCreatedAt
+          ? new Date(b.lastAppointmentCreatedAt).getTime()
+          : 0;
+        return bLast - aLast;
+      });
+    }
+    return list;
+  }, [activeBarbershops, sortMode]);
 
   useEffect(() => {
     let isMounted = true;
@@ -442,6 +490,11 @@ export function OwnerDashboard() {
 
         {!isLoading ? (
           <>
+            {/* WEEKLY RANKING — últimos 7 días, podio + lista */}
+            {metrics.weeklyRanking.length > 0 ? (
+              <WeeklyRanking ranking={metrics.weeklyRanking} />
+            ) : null}
+
             {/* PLATFORM TOTALS — métricas históricas, ribbon compacto */}
             <section className="mt-6 sm:mt-8">
               <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-muted)]">
@@ -477,23 +530,56 @@ export function OwnerDashboard() {
             </section>
 
             <section className="mt-6 sm:mt-8">
-              <div className="flex items-end justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--brand-gold)]">
                     Barberías activas
                   </p>
                   <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-                    {metrics.barbershops.filter((b) => b.isActive).length}{" "}
-                    {metrics.barbershops.filter((b) => b.isActive).length === 1
+                    {activeBarbershops.length}{" "}
+                    {activeBarbershops.length === 1
                       ? "barbería operando"
                       : "barberías operando"}
                   </p>
                 </div>
+
+                {/* Segmented control — ordenamiento. Solo se muestra si hay 2+ */}
+                {activeBarbershops.length >= 2 ? (
+                  <div
+                    role="radiogroup"
+                    aria-label="Ordenar barberías"
+                    className="inline-flex self-start overflow-hidden rounded-[var(--radius-sm)] border border-white/[0.06] bg-[color:var(--surface-1)]"
+                  >
+                    {(Object.keys(SORT_LABELS) as SortMode[]).map((mode) => {
+                      const Icon = SORT_LABELS[mode].icon;
+                      const isActive = sortMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          role="radio"
+                          aria-checked={isActive}
+                          onClick={() => setSortMode(mode)}
+                          className={cn(
+                            "inline-flex min-h-9 items-center gap-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] transition-colors duration-[var(--duration-fast)] press-shrink",
+                            isActive
+                              ? "bg-[color:var(--brand-gold-soft)] text-[color:var(--brand-gold)]"
+                              : "text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)]",
+                          )}
+                        >
+                          <Icon className="size-3.5" aria-hidden="true" />
+                          <span className="hidden sm:inline">
+                            {SORT_LABELS[mode].label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
 
               <div className="mt-3 grid gap-2.5">
-                {metrics.barbershops
-                  .filter((b) => b.isActive)
+                {sortedActiveBarbershops
                   .map((barbershop) => {
                     const resetCredentials =
                       resetCredentialsBySlug[barbershop.slug];
@@ -1016,5 +1102,138 @@ function OwnerCardKebab({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/* ───────────────────────────────────────────────────────── */
+
+/**
+ * Ranking semanal — top barberías por reservas (últimos 7 días).
+ * Top-3 con podio visual (gold/silver/bronze), resto en lista compacta.
+ * Se oculta entera si no hay datos en la ventana.
+ */
+function WeeklyRanking({ ranking }: { ranking: OwnerWeeklyRankingEntry[] }) {
+  const top3 = ranking.slice(0, 3);
+  const rest = ranking.slice(3, 8); // hasta top-8
+
+  const PODIUM: Array<{
+    medal: string;
+    accent: string;
+    accentBg: string;
+    border: string;
+    label: string;
+  }> = [
+    {
+      medal: "🥇",
+      accent: "text-[color:var(--brand-gold)]",
+      accentBg: "bg-[color:var(--brand-gold-soft)]",
+      border: "border-[color:var(--brand-gold)]/40",
+      label: "1°",
+    },
+    {
+      medal: "🥈",
+      accent: "text-slate-200",
+      accentBg: "bg-slate-400/10",
+      border: "border-slate-400/30",
+      label: "2°",
+    },
+    {
+      medal: "🥉",
+      accent: "text-amber-700",
+      accentBg: "bg-amber-700/10",
+      border: "border-amber-700/30",
+      label: "3°",
+    },
+  ];
+
+  return (
+    <section className="mt-6 sm:mt-8 animate-fade-up">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--brand-gold)]">
+            Ranking semanal
+          </p>
+          <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+            Top barberías por reservas, últimos 7 días
+          </p>
+        </div>
+        <Trophy
+          className="size-5 shrink-0 text-[color:var(--brand-gold)]/70"
+          aria-hidden="true"
+        />
+      </div>
+
+      {/* Podio top-3 — grid responsivo */}
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {top3.map((entry, i) => {
+          const meta = PODIUM[i];
+          return (
+            <Link
+              key={entry.slug}
+              href={`/${entry.slug}/admin`}
+              className={cn(
+                "group flex items-center gap-3 rounded-[var(--radius-sm)] border bg-[color:var(--surface-1)] p-3 transition-all duration-[var(--duration-fast)] hover-lift press-shrink",
+                meta.border,
+              )}
+            >
+              <div
+                className={cn(
+                  "flex size-10 shrink-0 items-center justify-center rounded-full text-lg",
+                  meta.accentBg,
+                )}
+                aria-hidden="true"
+              >
+                {meta.medal}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p
+                  className={cn(
+                    "text-[9px] font-bold uppercase tracking-[0.18em]",
+                    meta.accent,
+                  )}
+                >
+                  {meta.label} · {entry.count} reserva
+                  {entry.count === 1 ? "" : "s"}
+                </p>
+                <p className="mt-0.5 truncate text-sm font-bold text-white">
+                  {entry.name}
+                </p>
+                <p className="font-mono text-[10px] text-[color:var(--text-subtle)]">
+                  /{entry.slug}
+                </p>
+              </div>
+              <ArrowUpRight
+                className="size-4 shrink-0 text-[color:var(--text-subtle)] transition-colors group-hover:text-[color:var(--brand-gold)]"
+                aria-hidden="true"
+              />
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Resto (4° al 8°) — lista compacta */}
+      {rest.length > 0 ? (
+        <ul className="mt-2 divide-y divide-white/[0.04] overflow-hidden rounded-[var(--radius-sm)] border border-white/[0.04] bg-[color:var(--surface-1)]">
+          {rest.map((entry, i) => (
+            <li key={entry.slug}>
+              <Link
+                href={`/${entry.slug}/admin`}
+                className="group flex items-center gap-3 px-3 py-2 transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--brand-gold-soft)]/30"
+              >
+                <span className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-subtle)]">
+                  {i + 4}°
+                </span>
+                <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[color:var(--text-secondary)] group-hover:text-white">
+                  {entry.name}
+                </span>
+                <span className="font-mono text-[11px] font-bold tabular-nums text-[color:var(--brand-gold)]">
+                  {entry.count}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }
