@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CalendarDays,
+  Download,
   Phone,
   Scissors,
   Search,
@@ -287,6 +288,77 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
     setEditedTags(client.tags ?? []);
     setSuccessMessage("");
     setErrorMessage("");
+  }
+
+  function escapeCsv(value: string | number | null | undefined): string {
+    if (value === null || value === undefined) return "";
+    const str = String(value);
+    if (/[",\n\r]/.test(str)) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  }
+
+  function handleExportCsv() {
+    if (filteredClients.length === 0) return;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const header = [
+      "Nombre",
+      "Telefono",
+      "Email",
+      "Visitas",
+      "Ultima visita",
+      "Dias desde ultima",
+      "Segmento",
+      "Tags",
+      "Lifetime value",
+      "Notas",
+      "Cliente desde",
+    ];
+    const rows = filteredClients.map(
+      ({
+        client,
+        visits,
+        lastVisit,
+        daysSinceLastVisit,
+        segment,
+      }) => {
+        const apptsForClient =
+          appointmentsByClient.get(client.phone_normalized) ?? [];
+        const lifetime = apptsForClient
+          .filter(
+            (a) =>
+              a.status !== "cancelled" &&
+              a.status !== "deleted" &&
+              normalizeDateValue(a.appointment_date) <= todayIso,
+          )
+          .reduce((sum, a) => sum + (a.service_price ?? 0), 0);
+        return [
+          escapeCsv(client.name),
+          escapeCsv(client.phone_display),
+          escapeCsv(client.email ?? ""),
+          escapeCsv(visits),
+          escapeCsv(lastVisit ?? ""),
+          escapeCsv(daysSinceLastVisit ?? ""),
+          escapeCsv(SEGMENT_META[segment].label),
+          escapeCsv((client.tags ?? []).join(" / ")),
+          escapeCsv(lifetime),
+          escapeCsv(client.notes ?? ""),
+          escapeCsv(client.created_at.slice(0, 10)),
+        ].join(",");
+      },
+    );
+    // BOM para que Excel reconozca UTF-8 (acentos, ñ).
+    const csv = "﻿" + [header.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `clientes-${barbershop.slug}-${todayIso}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   async function handleSave() {
@@ -671,18 +743,29 @@ export function AdminClientsManager({ barbershop }: AdminClientsManagerProps) {
         </p>
       </header>
 
-      <div className="relative">
-        <Search
-          aria-hidden="true"
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--text-subtle)]"
-        />
-        <input
-          type="search"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Buscar por nombre o teléfono…"
-          className="h-11 w-full appearance-none rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-[color:var(--surface-0)] pl-9 pr-3 text-sm text-white placeholder:text-[color:var(--text-subtle)] focus:border-[color:var(--brand-gold)] focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
-        />
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+        <div className="relative">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--text-subtle)]"
+          />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar por nombre o teléfono…"
+            className="h-11 w-full appearance-none rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-[color:var(--surface-0)] pl-9 pr-3 text-sm text-white placeholder:text-[color:var(--text-subtle)] focus:border-[color:var(--brand-gold)] focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleExportCsv}
+          disabled={filteredClients.length === 0}
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="size-3.5" aria-hidden="true" />
+          Exportar CSV
+        </button>
       </div>
 
       {/* Alerta de inactivos / por reactivar */}
