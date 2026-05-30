@@ -106,6 +106,9 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   const [isBulkHardDeleting, setIsBulkHardDeleting] = useState(false);
   const [duplicatingAppointment, setDuplicatingAppointment] =
     useState<AppointmentRow | null>(null);
+  const [calendarQuickBlockDate, setCalendarQuickBlockDate] = useState<
+    string | null
+  >(null);
   const [restoringAppointmentId, setRestoringAppointmentId] = useState<
     string | null
   >(null);
@@ -1014,6 +1017,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                   setActiveFilter("day");
                 }}
                 countsByDay={countsByDay}
+                onQuickBlock={(date) => setCalendarQuickBlockDate(date)}
               />
             </div>
 
@@ -1455,6 +1459,21 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
             setAppointments(data ?? []);
           })();
         }}
+      />
+
+      {/* Instancia controlada: se abre desde la quick action del calendario,
+          con la fecha que el usuario eligió pre-llena. */}
+      <QuickBlockTimeButton
+        barbershopSlug={barbershop.slug}
+        barbers={barberFilterOptions}
+        focusDate={calendarQuickBlockDate ?? focusDate}
+        preselectedBarberId={
+          selectedBarberFilter !== "all"
+            ? selectedBarberFilter
+            : undefined
+        }
+        controlledOpen={calendarQuickBlockDate !== null}
+        onControlledClose={() => setCalendarQuickBlockDate(null)}
       />
     </div>
   );

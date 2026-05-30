@@ -19,7 +19,7 @@
  */
 
 import { useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarX, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   formatDayHeading,
@@ -37,7 +37,30 @@ type AgendaCalendarProps = {
   onFocusDateChange: (date: string) => void;
   /** Map "YYYY-MM-DD" → cantidad de turnos. Opcional, para mostrar dots. */
   countsByDay?: Record<string, number>;
+  /**
+   * Quick action contextual al pie del calendario para el día enfocado.
+   * Si está presente, se muestra una fila con botones de acción para
+   * el día actualmente seleccionado.
+   */
+  onQuickBlock?: (date: string) => void;
 };
+
+/**
+ * Colores del dot según cantidad de turnos:
+ * - 0: no dot
+ * - 1-3: verde (tranquilo)
+ * - 4-6: amber (lleno)
+ * - 7+: rojo (sobrecarga)
+ */
+function dotColorClass(count: number | undefined, isToday: boolean): string {
+  if (!count || count === 0) return "";
+  if (count >= 7) return "bg-[color:var(--danger)]";
+  if (count >= 4) return "bg-amber-400";
+  if (count >= 1) return "bg-[color:var(--success)]";
+  return isToday
+    ? "bg-[color:var(--brand-gold)]"
+    : "bg-[color:var(--brand-silver)]";
+}
 
 const SWIPE_THRESHOLD = 40;
 
@@ -45,6 +68,7 @@ export function AgendaCalendar({
   focusDate,
   onFocusDateChange,
   countsByDay,
+  onQuickBlock,
 }: AgendaCalendarProps) {
   const [isMonthExpanded, setIsMonthExpanded] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => {
@@ -295,6 +319,23 @@ export function AgendaCalendar({
         )}
       </div>
 
+      {/* Quick action contextual al día enfocado */}
+      {onQuickBlock ? (
+        <div className="flex items-center justify-between gap-2 border-t border-[color:var(--border-subtle)] px-3 py-2">
+          <p className="truncate text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
+            Acción rápida del día
+          </p>
+          <button
+            type="button"
+            onClick={() => onQuickBlock(focusDate)}
+            className="inline-flex items-center gap-1 rounded-[var(--radius-xs)] border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)]"
+          >
+            <CalendarX className="size-3" aria-hidden="true" />
+            Bloquear hora
+          </button>
+        </div>
+      ) : null}
+
       {/* Drag handle */}
       <div
         role="button"
@@ -364,11 +405,10 @@ function DayCell({
       {count && count > 0 && !isFocused ? (
         <span
           aria-hidden="true"
+          title={`${count} ${count === 1 ? "turno" : "turnos"}`}
           className={cn(
-            "absolute bottom-1.5 size-1 rounded-full",
-            isToday
-              ? "bg-[color:var(--brand-gold)]"
-              : "bg-[color:var(--brand-silver)]",
+            "absolute bottom-1.5 size-1.5 rounded-full",
+            dotColorClass(count, isToday),
           )}
         />
       ) : null}

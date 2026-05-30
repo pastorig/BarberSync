@@ -20,6 +20,13 @@ type QuickBlockTimeButtonProps = {
   preselectedBarberId?: string;
   /** Callback cuando se crea un bloqueo, para que el padre refresque agenda si necesita. */
   onBlockCreated?: () => void;
+  /**
+   * Si está presente, el modal pasa a ser controlado externamente y el
+   * trigger button NO se renderiza. Sirve para abrir el form desde otros
+   * lugares (ej: calendario).
+   */
+  controlledOpen?: boolean;
+  onControlledClose?: () => void;
 };
 
 export function QuickBlockTimeButton({
@@ -28,8 +35,19 @@ export function QuickBlockTimeButton({
   focusDate,
   preselectedBarberId,
   onBlockCreated,
+  controlledOpen,
+  onControlledClose,
 }: QuickBlockTimeButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = isControlled ? controlledOpen : internalOpen;
+  const closeModal = () => {
+    if (isControlled) {
+      onControlledClose?.();
+    } else {
+      setInternalOpen(false);
+    }
+  };
   const [barberId, setBarberId] = useState("");
   const [blockDate, setBlockDate] = useState(focusDate);
   const [startTime, setStartTime] = useState("");
@@ -66,10 +84,11 @@ export function QuickBlockTimeButton({
   useEffect(() => {
     if (!isOpen) return;
     function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsOpen(false);
+      if (event.key === "Escape") closeModal();
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   async function handleSubmit(event: React.FormEvent) {
@@ -103,7 +122,7 @@ export function QuickBlockTimeButton({
       setSuccessMessage("Bloqueo creado.");
       onBlockCreated?.();
       // Cerramos a los 800ms para que se lea el OK
-      window.setTimeout(() => setIsOpen(false), 800);
+      window.setTimeout(closeModal, 800);
     } catch {
       setErrorMessage("No pudimos crear el bloqueo.");
     } finally {
@@ -113,15 +132,17 @@ export function QuickBlockTimeButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)]"
-        aria-label="Bloquear horario"
-      >
-        <CalendarX className="size-3.5" aria-hidden="true" />
-        Bloquear hora
-      </button>
+      {!isControlled ? (
+        <button
+          type="button"
+          onClick={() => setInternalOpen(true)}
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--border-default)] bg-[color:var(--surface-1)] px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)]"
+          aria-label="Bloquear horario"
+        >
+          <CalendarX className="size-3.5" aria-hidden="true" />
+          Bloquear hora
+        </button>
+      ) : null}
 
       {isOpen ? (
         <div
@@ -130,7 +151,7 @@ export function QuickBlockTimeButton({
           aria-label="Bloquear horario"
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setIsOpen(false);
+            if (e.target === e.currentTarget) closeModal();
           }}
         >
           <div className="w-full max-w-md overflow-hidden rounded-t-[var(--radius-lg)] border border-[color:var(--border-default)] bg-[color:var(--surface-0)] shadow-2xl sm:rounded-[var(--radius-lg)]">
@@ -145,7 +166,7 @@ export function QuickBlockTimeButton({
               </div>
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={() => closeModal()}
                 aria-label="Cerrar"
                 className="inline-flex size-8 items-center justify-center rounded-[var(--radius-xs)] text-[color:var(--text-subtle)] transition-colors hover:bg-[color:var(--surface-1)] hover:text-white"
               >
@@ -278,7 +299,7 @@ export function QuickBlockTimeButton({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => closeModal()}
                   disabled={isSaving}
                   className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-sm)] border border-[color:var(--border-default)] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-secondary)] transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--brand-gold)] hover:text-[color:var(--brand-gold)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
