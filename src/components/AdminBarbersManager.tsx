@@ -19,6 +19,7 @@ import {
   toggleBarberActive,
   updateBarber,
 } from "@/lib/barbers";
+import { useConfirm } from "@/components/ui";
 import { formatPrice } from "@/lib/format";
 import type { BarberRow, BarberServiceRow } from "@/lib/supabase";
 
@@ -67,6 +68,7 @@ export function AdminBarbersManager({ barbershop }: AdminBarbersManagerProps) {
   >({});
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const confirm = useConfirm();
   const [updatingBarberId, setUpdatingBarberId] = useState<string | null>(null);
   const [updatingServiceId, setUpdatingServiceId] = useState<string | null>(
     null,
@@ -221,9 +223,12 @@ export function AdminBarbersManager({ barbershop }: AdminBarbersManagerProps) {
   async function handleSetAsOwner(barber: BarberRow) {
     if (barber.is_owner) return;
     const displayName = getDisplayName(barber);
-    const ok = window.confirm(
-      `¿Marcar a ${displayName} como cabeza de la barbería? Va a aparecer primero en la landing pública con borde dorado.`,
-    );
+    const ok = await confirm({
+      title: "Cabeza de la barbería",
+      message: `${displayName} va a aparecer primero en la landing pública con borde dorado. Solo puede haber un cabeza.`,
+      confirmLabel: "Marcar como cabeza",
+      cancelLabel: "Volver",
+    });
     if (!ok) return;
 
     setErrorMessage("");
@@ -322,9 +327,13 @@ export function AdminBarbersManager({ barbershop }: AdminBarbersManagerProps) {
   }
 
   async function handleDeleteBarber(barber: BarberRow) {
-    const shouldDelete = window.confirm(
-      `Eliminar visualmente a ${getDisplayName(barber)}? No aparecera en reservas.`,
-    );
+    const shouldDelete = await confirm({
+      title: "Eliminar barbero",
+      message: `${getDisplayName(barber)} deja de aparecer en reservas y en la landing. Los turnos pasados quedan en la historia.`,
+      confirmLabel: "Eliminar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
 
     if (!shouldDelete) {
       return;
@@ -517,9 +526,13 @@ export function AdminBarbersManager({ barbershop }: AdminBarbersManagerProps) {
   }
 
   async function handleDeleteService(service: BarberServiceRow) {
-    const shouldDelete = window.confirm(
-      `Eliminar visualmente el servicio ${service.name}?`,
-    );
+    const shouldDelete = await confirm({
+      title: "Eliminar servicio",
+      message: `${service.name} deja de aparecer cuando los clientes reservan.`,
+      confirmLabel: "Eliminar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
 
     if (!shouldDelete) {
       return;

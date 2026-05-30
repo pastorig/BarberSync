@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import type { DemoBarbershop } from "@/data/demo-barbershops";
+import { useConfirm } from "@/components/ui";
 import { getCurrentSession } from "@/lib/auth";
 
 type AdminSettingsFormProps = {
@@ -15,6 +16,7 @@ function isValidTimeValue(value: string) {
 }
 
 export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
+  const confirm = useConfirm();
   const [name, setName] = useState(barbershop.name);
   const [description, setDescription] = useState(barbershop.description);
   const [whatsapp, setWhatsapp] = useState(barbershop.whatsapp);
@@ -192,7 +194,13 @@ export function AdminSettingsForm({ barbershop }: AdminSettingsFormProps) {
 
   async function handleRemoveLogo() {
     if (!logoUrl) return;
-    const ok = window.confirm("¿Quitar el logo de tu barbería?");
+    const ok = await confirm({
+      title: "Quitar logo",
+      message: "El logo deja de aparecer en la landing pública. Podés subir uno nuevo cuando quieras.",
+      confirmLabel: "Quitar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setErrorMessage("");
     setSuccessMessage("");

@@ -46,7 +46,7 @@ import {
   createWhatsAppDelayLink,
   createWhatsAppReviewRequestLink,
 } from "@/lib/whatsapp";
-import { Select } from "@/components/ui";
+import { Select, useConfirm } from "@/components/ui";
 import { AgendaCalendar } from "./admin/AgendaCalendar";
 import { AppointmentRow as AppointmentCard } from "./admin/AppointmentRow";
 import { DuplicateAppointmentModal } from "./admin/DuplicateAppointmentModal";
@@ -106,6 +106,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
   const [isBulkHardDeleting, setIsBulkHardDeleting] = useState(false);
   const [duplicatingAppointment, setDuplicatingAppointment] =
     useState<AppointmentRow | null>(null);
+  const confirm = useConfirm();
   const [calendarQuickBlockDate, setCalendarQuickBlockDate] = useState<
     string | null
   >(null);
@@ -570,11 +571,15 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       setErrorMessage("No pudimos identificar la reserva.");
       return;
     }
-    const ok = window.confirm(
-      `Cancelar el turno de ${appointment.customer_name} del ${formatDateForDisplay(
+    const ok = await confirm({
+      title: "Cancelar turno",
+      message: `Vas a cancelar el turno de ${appointment.customer_name} del ${formatDateForDisplay(
         appointment.appointment_date,
-      )} a las ${normalizeTimeShort(appointment.appointment_time)}?`,
-    );
+      )} a las ${normalizeTimeShort(appointment.appointment_time)}. El cliente no recibe aviso automático — avisale por WhatsApp después.`,
+      confirmLabel: "Sí, cancelar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setErrorMessage("");
     setCancellingAppointmentId(appointment.id);
@@ -601,9 +606,13 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       setErrorMessage("No pudimos identificar la reserva.");
       return;
     }
-    const ok = window.confirm(
-      `Eliminar visualmente el turno cancelado de ${appointment.customer_name}?`,
-    );
+    const ok = await confirm({
+      title: "Eliminar turno cancelado",
+      message: `Vas a sacar de la vista el turno cancelado de ${appointment.customer_name}. Pasa a "Eliminados" — desde ahí podés restaurarlo o borrarlo definitivo.`,
+      confirmLabel: "Eliminar",
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setErrorMessage("");
     setDeletingAppointmentId(appointment.id);
@@ -630,9 +639,13 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       setErrorMessage("No pudimos identificar la reserva.");
       return;
     }
-    const ok = window.confirm(
-      `Borrar definitivamente el turno de ${appointment.customer_name}? Esta acción no se puede deshacer.`,
-    );
+    const ok = await confirm({
+      title: "Borrar definitivamente",
+      message: `Vas a borrar para siempre el turno de ${appointment.customer_name}. Esta acción no se puede deshacer.`,
+      confirmLabel: "Borrar definitivo",
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setErrorMessage("");
     setHardDeletingAppointmentId(appointment.id);
@@ -711,9 +724,13 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
       (a) => a.status === "deleted",
     );
     if (deletedAppointments.length === 0) return;
-    const ok = window.confirm(
-      `Borrar definitivamente los ${deletedAppointments.length} turnos eliminados? Esta acción no se puede deshacer.`,
-    );
+    const ok = await confirm({
+      title: "Vaciar Eliminados",
+      message: `Vas a borrar para siempre los ${deletedAppointments.length} turnos del apartado Eliminados. Esta acción no se puede deshacer.`,
+      confirmLabel: `Borrar los ${deletedAppointments.length}`,
+      cancelLabel: "Volver",
+      danger: true,
+    });
     if (!ok) return;
     setErrorMessage("");
     setIsBulkHardDeleting(true);
