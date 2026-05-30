@@ -21,12 +21,19 @@ type AppointmentTimeInput = AppointmentAvailabilityInput & {
   appointmentTime: string;
 };
 
-export async function createPendingAppointment(appointment: AppointmentDraft) {
+export async function createPendingAppointment(
+  appointment: AppointmentDraft,
+  options?: { autoConfirm?: boolean },
+) {
+  // Cuando la barbería tiene auto-confirm activado, la reserva entra
+  // directamente como confirmed para saltear el paso manual. Default a
+  // pending para preservar el flujo original.
+  const status = options?.autoConfirm ? "confirmed" : "pending";
   // .select().single() para que el INSERT devuelva la fila creada,
   // incluyendo el confirmation_token auto-generado por DB.
   return getSupabaseClient()
     .from("appointments")
-    .insert({ ...appointment, status: "pending" })
+    .insert({ ...appointment, status })
     .select("id, confirmation_token")
     .single();
 }
