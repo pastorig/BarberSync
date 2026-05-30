@@ -277,6 +277,37 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     return projections;
   }, [appointments]);
 
+  /**
+   * Id del turno "próximo" del día: el primer pending/confirmed cuya hora
+   * estimada todavía no llegó. Sirve para el highlight ring gold en el card.
+   */
+  const nextUpAppointmentId = useMemo(() => {
+    const now = new Date();
+    const todayIso = getTodayYmd();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const candidates = appointments
+      .filter(
+        (a) =>
+          a.id &&
+          (a.status === "pending" || a.status === "confirmed") &&
+          normalizeDateValue(a.appointment_date) === todayIso,
+      )
+      .map((a) => {
+        const projection = a.id
+          ? scheduleProjectionByAppointmentId.get(a.id)
+          : undefined;
+        const startMinutes =
+          projection?.estimatedStartMinutes ??
+          timeValueToMinutes(a.appointment_time);
+        return { id: a.id ?? null, startMinutes };
+      })
+      .filter((c) => c.id && c.startMinutes > nowMinutes)
+      .sort((a, b) => a.startMinutes - b.startMinutes);
+
+    return candidates[0]?.id ?? null;
+  }, [appointments, scheduleProjectionByAppointmentId]);
+
   const filterCounts: Record<AppointmentFilter, number> = useMemo(
     () => ({
       day: focusDateAppointments.length,
@@ -1369,6 +1400,10 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
                       clientTags={getTagsForAppointment(appointment)}
                       reviewWhatsAppHref={reviewWhatsAppHref}
                       delayWhatsAppHref={delayWhatsAppHref}
+                      isNextUp={
+                        Boolean(appointment.id) &&
+                        appointment.id === nextUpAppointmentId
+                      }
                     />,
                   ];
 
