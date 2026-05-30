@@ -509,6 +509,28 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     weeklySchedulesByBarber,
   ]);
 
+  /**
+   * Para cada (barber, focusDate), la hora más tardía a la que termina
+   * algún turno activo. Sirve para detectar si una extensión persistida
+   * sigue siendo "necesaria" (algún turno excede el cierre base) o si
+   * quedó como fantasma porque las duraciones volvieron a la normalidad.
+   */
+  const latestEstimatedEndByBarberOnFocusDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of appointments) {
+      if (!a.id) continue;
+      if (a.status !== "pending" && a.status !== "confirmed") continue;
+      if (normalizeDateValue(a.appointment_date) !== focusDate) continue;
+      const projection = scheduleProjectionByAppointmentId.get(a.id);
+      const end =
+        projection?.estimatedEndMinutes ??
+        timeValueToMinutes(a.appointment_time) + a.service_duration_minutes;
+      const prev = map.get(a.barber_id) ?? 0;
+      if (end > prev) map.set(a.barber_id, end);
+    }
+    return map;
+  }, [appointments, focusDate, scheduleProjectionByAppointmentId]);
+
   const resolvedDayOverrideSummaries = useMemo(() => {
     return Object.entries(dayOverridesByBarber)
       .filter(([, override]) => override !== null)
@@ -543,15 +565,20 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
         };
       })
       .filter((summary): summary is NonNullable<typeof summary> => summary !== null)
-      // BUG 1: ocultar el aprovechamiento "fantasma" — si el override
-      // termina al mismo horario que el base, NO hay extensión real.
-      // Pasa cuando la duración real vuelve a la normalidad después de
-      // haberse extendido.
-      .filter(
-        (summary) =>
-          timeValueToMinutes(summary.overrideClosingTime) !==
-          timeValueToMinutes(summary.baseClosingTime),
-      );
+      // BUG 1: ocultar el aprovechamiento "fantasma".
+      // Caso A: el override iguala al base — no hay extensión real.
+      // Caso B: hay override > base, pero ningún turno actual excede el
+      // cierre base (la extensión sobra porque las duraciones volvieron
+      // a la normalidad). El override sigue en DB pero ya no aporta.
+      .filter((summary) => {
+        const baseMinutes = timeValueToMinutes(summary.baseClosingTime);
+        const overrideMinutes = timeValueToMinutes(summary.overrideClosingTime);
+        if (overrideMinutes === baseMinutes) return false;
+        const latestEnd =
+          latestEstimatedEndByBarberOnFocusDate.get(summary.barberId) ?? 0;
+        if (latestEnd <= baseMinutes) return false;
+        return true;
+      });
   }, [
     barbers,
     barbershop.workingHours,
@@ -559,6 +586,7 @@ export function AdminAppointments({ barbershop }: AdminAppointmentsProps) {
     focusDate,
     selectedBarberFilter,
     weeklySchedulesByBarber,
+    latestEstimatedEndByBarberOnFocusDate,
   ]);
 
   const hasOptimizationSection =
